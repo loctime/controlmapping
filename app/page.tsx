@@ -357,6 +357,7 @@ export default function Home() {
               onRemoveMapping={handleRemoveMapping}
               isOpen={isMappingPanelOpen}
               onOpenChange={setIsMappingPanelOpen}
+              excelData={excelData}
             />
           </>
         )}

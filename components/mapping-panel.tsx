@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Plus, Trash2, Tag, CheckCircle2 } from "lucide-react"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet"
-import type { CellMapping } from "@/types/excel"
+import type { CellMapping, ExcelData } from "@/types/excel"
 
 interface MappingPanelProps {
   selectedCell: string | null
@@ -18,6 +18,7 @@ interface MappingPanelProps {
   onRemoveMapping: (id: string) => void
   isOpen: boolean
   onOpenChange: (open: boolean) => void
+  excelData?: ExcelData | null
 }
 
 const COMMON_LABELS = [
@@ -45,7 +46,8 @@ export function MappingPanel({
   onAddMapping, 
   onRemoveMapping,
   isOpen,
-  onOpenChange
+  onOpenChange,
+  excelData
 }: MappingPanelProps) {
   const [customLabel, setCustomLabel] = useState("")
   const [showCustomInput, setShowCustomInput] = useState(false)
@@ -61,6 +63,18 @@ export function MappingPanel({
   const isCellMapped = (cellId: string) => {
     return mappings.some((m) => m.cellId === cellId)
   }
+
+  // Obtener el valor de la celda seleccionada
+  const getCellValue = (cellId: string | null): string => {
+    if (!cellId || !excelData || !excelData.sheets[0]) return ""
+    const cell = excelData.sheets[0].cells[cellId]
+    if (!cell) return ""
+    const value = cell.value
+    if (value === null || value === undefined) return ""
+    return String(value).trim()
+  }
+
+  const cellValue = getCellValue(selectedCell)
 
   return (
     <Sheet open={isOpen} onOpenChange={onOpenChange}>
@@ -85,11 +99,18 @@ export function MappingPanel({
           {selectedCell ? (
             <Card className="p-4 bg-accent/50 border-primary/20">
               <div className="space-y-3">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2">
                   <Label className="text-sm font-medium text-foreground">Celda seleccionada</Label>
-                  <Badge variant="outline" className="font-mono">
-                    {selectedCell}
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="font-mono text-xs">
+                      {selectedCell}
+                    </Badge>
+                    {cellValue && (
+                      <span className="text-xs text-muted-foreground truncate max-w-[150px]" title={cellValue}>
+                        {cellValue}
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 {isCellMapped(selectedCell) ? (

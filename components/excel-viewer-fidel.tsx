@@ -1,9 +1,6 @@
 "use client"
 
 import { useRef, useState, useEffect, useMemo, useCallback } from "react"
-import { ZoomIn, ZoomOut, Maximize2 } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Slider } from "@/components/ui/slider"
 import { Badge } from "@/components/ui/badge"
 import type { ExcelData, CellMapping, CellStyle } from "@/types/excel"
 import * as XLSX from "xlsx"
@@ -98,8 +95,11 @@ export function ExcelViewerFidel({
 }: ExcelViewerFidelProps) {
   const excelTableRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const topScrollRef = useRef<HTMLDivElement>(null)
+  const bottomScrollRef = useRef<HTMLDivElement>(null)
   const hoverTimeoutRef = useRef<number | null>(null)
   const [hoveredCell, setHoveredCell] = useState<string | null>(null)
+  const isScrollingRef = useRef(false)
 
   const sheet = data.sheets[0]
   
@@ -397,53 +397,94 @@ export function ExcelViewerFidel({
     return mappingsMap.get(cellId)?.label
   }, [mappingsMap])
 
+  // Sincronizar scroll horizontal entre barras superior e inferior
+  useEffect(() => {
+    const topScroll = topScrollRef.current
+    const bottomScroll = bottomScrollRef.current
+    const excelContainer = excelTableRef.current
+
+    if (!topScroll || !bottomScroll || !excelContainer) return
+
+    // Sincronizar el ancho de la barra superior con el contenido
+    const syncWidth = () => {
+      const table = excelContainer.querySelector('table')
+      if (table) {
+        const scrollContent = topScroll.querySelector('div')
+        if (scrollContent) {
+          // Obtener el ancho real del contenido escalado
+          const tableWidth = table.scrollWidth
+          const scaledWidth = tableWidth * (zoom / 100)
+          scrollContent.style.width = `${scaledWidth}px`
+        }
+      }
+    }
+
+    // Sincronizar scroll
+    const handleTopScroll = () => {
+      if (!isScrollingRef.current) {
+        isScrollingRef.current = true
+        bottomScroll.scrollLeft = topScroll.scrollLeft
+        requestAnimationFrame(() => {
+          isScrollingRef.current = false
+        })
+      }
+    }
+
+    const handleBottomScroll = () => {
+      if (!isScrollingRef.current) {
+        isScrollingRef.current = true
+        topScroll.scrollLeft = bottomScroll.scrollLeft
+        requestAnimationFrame(() => {
+          isScrollingRef.current = false
+        })
+      }
+    }
+
+    // Sincronizar ancho inicial y cuando cambia el zoom
+    syncWidth()
+    const resizeObserver = new ResizeObserver(() => {
+      syncWidth()
+    })
+    resizeObserver.observe(excelContainer)
+
+    topScroll.addEventListener('scroll', handleTopScroll)
+    bottomScroll.addEventListener('scroll', handleBottomScroll)
+
+    return () => {
+      topScroll.removeEventListener('scroll', handleTopScroll)
+      bottomScroll.removeEventListener('scroll', handleBottomScroll)
+      resizeObserver.disconnect()
+    }
+  }, [excelHTML, zoom])
+
   return (
     <div ref={containerRef} className="flex flex-col h-full bg-muted/30 relative">
-      {/* Controles de zoom flotantes */}
-      <div className="absolute top-4 right-4 z-50 flex items-center gap-2 bg-card border border-border rounded-lg shadow-lg p-2">
-        <Button 
-          variant="outline" 
-          size="sm" 
-          onClick={() => onZoomChange(Math.max(50, zoom - 10))}
-          className="h-8 w-8 p-0"
+      {/* Barra de scroll horizontal superior */}
+      {excelHTML && excelHTML.trim() !== "" && (
+        <div 
+          ref={topScrollRef}
+          className="overflow-x-auto overflow-y-hidden border-b border-border bg-muted/50 custom-scrollbar-top"
+          style={{ 
+            height: '20px',
+            padding: '0 20px'
+          }}
         >
-          <ZoomOut className="h-4 w-4" />
-        </Button>
-
-        <div className="flex items-center gap-2 min-w-[120px]">
-          <Slider
-            value={[zoom]}
-            onValueChange={([value]) => onZoomChange(value)}
-            min={50}
-            max={150}
-            step={10}
-            className="flex-1"
+          <div 
+            style={{ 
+              height: '1px',
+              width: '100%',
+              minWidth: 'max-content'
+            }} 
           />
-          <span className="text-xs font-medium text-foreground w-10 text-center">{zoom}%</span>
         </div>
-
-        <Button 
-          variant="outline" 
-          size="sm" 
-          onClick={() => onZoomChange(Math.min(150, zoom + 10))}
-          className="h-8 w-8 p-0"
-        >
-          <ZoomIn className="h-4 w-4" />
-        </Button>
-
-        <Button 
-          variant="outline" 
-          size="sm" 
-          onClick={() => onZoomChange(100)}
-          className="h-8 w-8 p-0"
-          title="Resetear zoom"
-        >
-          <Maximize2 className="h-4 w-4" />
-        </Button>
-      </div>
+      )}
 
       {/* Excel Container - Sin padding, ocupa todo el espacio */}
-      <div className="flex-1 overflow-auto relative" style={{ padding: '20px' }}>
+      <div 
+        ref={bottomScrollRef}
+        className="flex-1 overflow-auto relative custom-scrollbar" 
+        style={{ padding: '20px' }}
+      >
         {!excelHTML || excelHTML.trim() === "" ? (
           <div className="flex items-center justify-center h-full">
             <div className="text-center">
@@ -457,11 +498,10 @@ export function ExcelViewerFidel({
               transform: `scale(${zoom / 100})`,
               transformOrigin: "top left",
               display: "inline-block",
-              minWidth: "100%",
               pointerEvents: "auto",
             }}
           >
-            <div className="relative inline-block bg-white border border-border rounded-lg shadow-sm" style={{ pointerEvents: "auto" }}>
+            <div className="relative inline-block bg-white border border-border rounded-lg shadow-sm" style={{ pointerEvents: "auto", width: "100%" }}>
               <div
                 ref={excelTableRef}
                 className="excel-table-container"

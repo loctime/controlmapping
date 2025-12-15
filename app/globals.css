@@ -133,3 +133,63 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Scrollbars más grandes y fáciles de usar */
+.custom-scrollbar {
+  scrollbar-width: thick;
+  scrollbar-color: rgba(0, 0, 0, 0.3) transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 16px;
+  height: 16px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.5);
+  background-clip: padding-box;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:active {
+  background: rgba(0, 0, 0, 0.6);
+  background-clip: padding-box;
+}
+
+/* Barra de scroll superior específica */
+.custom-scrollbar-top {
+  scrollbar-width: thick;
+  scrollbar-color: rgba(0, 0, 0, 0.3) transparent;
+}
+
+.custom-scrollbar-top::-webkit-scrollbar {
+  height: 16px;
+}
+
+.custom-scrollbar-top::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 8px;
+}
+
+.custom-scrollbar-top::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.custom-scrollbar-top::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.5);
+  background-clip: padding-box;
+}

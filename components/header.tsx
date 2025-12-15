@@ -1,8 +1,9 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
-import { FileSpreadsheet, Save, RotateCcw, Menu, X } from "lucide-react"
+import { FileSpreadsheet, Save, RotateCcw, Menu, X, ZoomIn, ZoomOut, Maximize2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
+import { Slider } from "@/components/ui/slider"
 
 interface HeaderProps {
   fileName?: string
@@ -11,6 +12,8 @@ interface HeaderProps {
   onReset: () => void
   onToggleMappingPanel: () => void
   isMappingPanelOpen: boolean
+  zoom?: number
+  onZoomChange?: (zoom: number) => void
 }
 
 export function Header({ 
@@ -19,7 +22,9 @@ export function Header({
   onSaveSchema, 
   onReset,
   onToggleMappingPanel,
-  isMappingPanelOpen
+  isMappingPanelOpen,
+  zoom = 100,
+  onZoomChange
 }: HeaderProps) {
   return (
     <header className="border-b border-border bg-card shrink-0">
@@ -30,7 +35,7 @@ export function Header({
               <FileSpreadsheet className="h-4 w-4" />
             </div>
             <div className="min-w-0">
-              <h1 className="text-sm font-semibold text-foreground leading-tight">ControlMapping</h1>
+              <h1 className="text-sm font-semibold text-foreground leading-tight">Excel Mapper</h1>
             </div>
           </div>
 
@@ -50,6 +55,53 @@ export function Header({
         <div className="flex items-center gap-2 shrink-0">
           {fileName && (
             <>
+              {/* Controles de Zoom */}
+              {onZoomChange && (
+                <div className="hidden md:flex items-center gap-2 px-2 border-r border-border mr-2">
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => onZoomChange(Math.max(50, zoom - 10))}
+                    className="h-7 w-7 p-0"
+                    title="Alejar"
+                  >
+                    <ZoomOut className="h-3.5 w-3.5" />
+                  </Button>
+
+                  <div className="flex items-center gap-2 min-w-[100px]">
+                    <Slider
+                      value={[zoom]}
+                      onValueChange={([value]) => onZoomChange(value)}
+                      min={50}
+                      max={150}
+                      step={10}
+                      className="w-20"
+                    />
+                    <span className="text-xs font-medium text-foreground w-10 text-center">{zoom}%</span>
+                  </div>
+
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => onZoomChange(Math.min(150, zoom + 10))}
+                    className="h-7 w-7 p-0"
+                    title="Acercar"
+                  >
+                    <ZoomIn className="h-3.5 w-3.5" />
+                  </Button>
+
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => onZoomChange(100)}
+                    className="h-7 w-7 p-0"
+                    title="Resetear zoom"
+                  >
+                    <Maximize2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              )}
+
               <Button 
                 variant="ghost" 
                 size="sm" 

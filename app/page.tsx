@@ -326,6 +326,8 @@ export default function Home() {
         }}
         onToggleMappingPanel={() => setIsMappingPanelOpen(!isMappingPanelOpen)}
         isMappingPanelOpen={isMappingPanelOpen}
+        zoom={zoom}
+        onZoomChange={setZoom}
       />
 
       <div className="flex-1 flex overflow-hidden">

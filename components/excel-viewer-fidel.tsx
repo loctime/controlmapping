@@ -63,10 +63,12 @@ const styleToCSS = (style?: CellStyle): string => {
     cssProps.push(`overflow-wrap: break-word`)
   } else {
     cssProps.push(`white-space: nowrap`)
-    cssProps.push(`overflow: visible`)
+    cssProps.push(`overflow: hidden`)
+    cssProps.push(`text-overflow: ellipsis`)
   }
   
   cssProps.push(`padding: 2px 4px`)
+  // No agregar max-width aquí, lo haremos con CSS global
   
   return cssProps.join("; ")
 }
@@ -196,7 +198,7 @@ export function ExcelViewerFidel({
       cellsByRow.get(pos.r)!.set(pos.c, { addr, ...data })
     })
     
-    let html = `<table data-excel-table style="border-collapse: collapse; table-layout: auto; width: auto; min-width: 100%; font-family: 'Segoe UI', Calibri, Arial, sans-serif;">`
+    let html = `<table data-excel-table style="border-collapse: collapse; table-layout: auto; width: auto; font-family: 'Segoe UI', Calibri, Arial, sans-serif;">`
     html += `<tbody>`
 
     for (let R = startRow; R <= endRow; R++) {
@@ -229,7 +231,9 @@ export function ExcelViewerFidel({
           const dataCellId = ` data-cell-id="${cellAddress}"`
           
           const displayValue = typeof value === "string" ? escapeHtml(value) : value
-          html += `<td${dataCellId}${styleAttr}${rowspanAttr}${colspanAttr}>${displayValue}</td>`
+          // Agregar title para mostrar texto completo al hacer hover
+          const titleAttr = typeof value === "string" && value.length > 50 ? ` title="${escapeHtml(String(value))}"` : ""
+          html += `<td${dataCellId}${styleAttr}${rowspanAttr}${colspanAttr}${titleAttr}>${displayValue}</td>`
         }
       }
       html += `</tr>`
@@ -305,19 +309,28 @@ export function ExcelViewerFidel({
         style = document.createElement("style")
         style.id = "excel-table-styles"
         style.textContent = `
-          table[data-excel-table] [data-cell-id] {
-            pointer-events: auto !important;
-            cursor: pointer !important;
-            position: relative !important;
-            user-select: none !important;
-          }
-          table[data-excel-table] {
-            pointer-events: auto !important;
-          }
-          .excel-table-container {
-            pointer-events: auto !important;
-          }
-        `
+        table[data-excel-table] {
+          pointer-events: auto !important;
+        }
+        table[data-excel-table] [data-cell-id] {
+          pointer-events: auto !important;
+          cursor: pointer !important;
+          position: relative !important;
+          user-select: none !important;
+        }
+        table[data-excel-table] td {
+          max-width: 400px !important;
+          min-width: 80px !important;
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+        }
+        table[data-excel-table] td[colspan] {
+          max-width: none !important;
+        }
+        .excel-table-container {
+          pointer-events: auto !important;
+        }
+      `
         document.head.appendChild(style)
       }
       

@@ -264,7 +264,7 @@ export default function Home() {
       setIsLoading(false)
       setIsMappingPanelOpen(true) // Abrir panel automáticamente al cargar
     } catch (error) {
-      console.error("[v0] Error al procesar Excel:", error)
+      console.error("Error al procesar Excel:", error)
       setIsLoading(false)
       alert("Error al procesar el archivo Excel. Por favor, intenta con otro archivo.")
     }

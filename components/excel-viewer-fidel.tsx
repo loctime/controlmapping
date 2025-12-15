@@ -245,20 +245,19 @@ export function ExcelViewerFidel({
   
   // Event delegation con corrección para transform scale
   useEffect(() => {
-    if (!excelTableRef.current || !containerRef.current) return
+    if (!excelTableRef.current) return
 
-    const table = excelTableRef.current.querySelector("table")
-    if (!table) return
-
+    const container = excelTableRef.current
+    
     const handleClick = (e: MouseEvent) => {
-      e.preventDefault()
-      e.stopPropagation()
-      
       const target = e.target as HTMLElement
+      
+      // Buscar la celda más cercana con data-cell-id
       const cell = target.closest("[data-cell-id]") as HTMLElement
       if (cell) {
         const cellId = cell.getAttribute("data-cell-id")
         if (cellId) {
+          console.log("✅ Celda clickeada:", cellId, "Valor:", cell.textContent?.trim()) // Debug
           onCellSelect(cellId)
         }
       }
@@ -285,35 +284,51 @@ export function ExcelViewerFidel({
       setHoveredCell(null)
     }
 
-    // Usar capture phase para asegurar que los eventos se capturen
-    table.addEventListener("click", handleClick, true)
-    table.addEventListener("mouseover", handleMouseOver, true)
-    table.addEventListener("mouseout", handleMouseOut, true)
+    // Esperar un momento para asegurar que el HTML se haya renderizado
+    const timeoutId = setTimeout(() => {
+      const table = container.querySelector("table")
+      if (!table) {
+        console.log("⚠️ No se encontró la tabla")
+        return
+      }
+      
+      console.log("✅ Tabla encontrada, registrando eventos")
 
-    let style = document.getElementById("excel-table-styles") as HTMLStyleElement
-    if (!style) {
-      style = document.createElement("style")
-      style.id = "excel-table-styles"
-      style.textContent = `
-        table[data-excel-table] [data-cell-id] {
-          pointer-events: auto !important;
-          cursor: pointer !important;
-          position: relative !important;
-          user-select: none !important;
-        }
-        table[data-excel-table] {
-          pointer-events: auto !important;
-        }
-      `
-      document.head.appendChild(style)
-    }
-    
-    table.setAttribute("data-excel-table", "true")
+      // Agregar eventos directamente al contenedor para mejor captura
+      container.addEventListener("click", handleClick)
+      container.addEventListener("mouseover", handleMouseOver)
+      container.addEventListener("mouseout", handleMouseOut)
+
+      // Asegurar estilos para que las celdas sean clickeables
+      let style = document.getElementById("excel-table-styles") as HTMLStyleElement
+      if (!style) {
+        style = document.createElement("style")
+        style.id = "excel-table-styles"
+        style.textContent = `
+          table[data-excel-table] [data-cell-id] {
+            pointer-events: auto !important;
+            cursor: pointer !important;
+            position: relative !important;
+            user-select: none !important;
+          }
+          table[data-excel-table] {
+            pointer-events: auto !important;
+          }
+          .excel-table-container {
+            pointer-events: auto !important;
+          }
+        `
+        document.head.appendChild(style)
+      }
+      
+      table.setAttribute("data-excel-table", "true")
+    }, 100) // Pequeño delay para asegurar renderizado
 
     return () => {
-      table.removeEventListener("click", handleClick, true)
-      table.removeEventListener("mouseover", handleMouseOver, true)
-      table.removeEventListener("mouseout", handleMouseOut, true)
+      clearTimeout(timeoutId)
+      container.removeEventListener("click", handleClick)
+      container.removeEventListener("mouseover", handleMouseOver)
+      container.removeEventListener("mouseout", handleMouseOut)
       if (hoverTimeoutRef.current) {
         cancelAnimationFrame(hoverTimeoutRef.current)
         hoverTimeoutRef.current = null
@@ -430,14 +445,15 @@ export function ExcelViewerFidel({
               transformOrigin: "top left",
               display: "inline-block",
               minWidth: "100%",
+              pointerEvents: "auto",
             }}
           >
-            <div className="relative inline-block bg-white border border-border rounded-lg shadow-sm">
+            <div className="relative inline-block bg-white border border-border rounded-lg shadow-sm" style={{ pointerEvents: "auto" }}>
               <div
                 ref={excelTableRef}
                 className="excel-table-container"
                 dangerouslySetInnerHTML={{ __html: excelHTML }}
-                style={{ userSelect: "none" }}
+                style={{ userSelect: "none", pointerEvents: "auto" }}
               />
 
               {selectedCell && getMappingLabel(selectedCell) && (

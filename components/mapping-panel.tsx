@@ -227,6 +227,32 @@ export function MappingPanel({
                 >
                   Copiar esquema
                 </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full justify-start gap-2 bg-transparent h-8"
+                  onClick={() => {
+                    const name = window.prompt('Nombre de la plantilla:')
+                    if (!name) return
+                    try {
+                      const key = 'excelTemplates'
+                      const raw = localStorage.getItem(key)
+                      const arr = raw ? JSON.parse(raw) : []
+                      const tpl = { name: name.trim(), mappings }
+                      const idx = arr.findIndex((t: any) => t.name === tpl.name)
+                      if (idx >= 0) arr[idx] = tpl
+                      else arr.push(tpl)
+                      localStorage.setItem(key, JSON.stringify(arr))
+                      alert('Plantilla guardada')
+                    } catch (err) {
+                      // eslint-disable-next-line no-console
+                      console.error(err)
+                      alert('Error guardando la plantilla')
+                    }
+                  }}
+                >
+                  Guardar plantilla
+                </Button>
               </div>
             </Card>
           )}

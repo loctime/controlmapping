@@ -328,6 +328,10 @@ export default function Home() {
         isMappingPanelOpen={isMappingPanelOpen}
         zoom={zoom}
         onZoomChange={setZoom}
+        onLoadTemplate={(tplMappings) => {
+          // replace current mappings with the template's mappings
+          setMappings(tplMappings)
+        }}
       />
 
       <div className="flex-1 flex overflow-hidden">

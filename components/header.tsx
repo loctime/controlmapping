@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button"
 import { FileSpreadsheet, Save, RotateCcw, Menu, X, ZoomIn, ZoomOut, Maximize2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Slider } from "@/components/ui/slider"
+import { useEffect, useState } from "react"
+import type { CellMapping } from "@/types/excel"
 
 interface HeaderProps {
   fileName?: string
@@ -14,6 +16,7 @@ interface HeaderProps {
   isMappingPanelOpen: boolean
   zoom?: number
   onZoomChange?: (zoom: number) => void
+  onLoadTemplate?: (mappings: CellMapping[]) => void
 }
 
 export function Header({ 
@@ -24,8 +27,26 @@ export function Header({
   onToggleMappingPanel,
   isMappingPanelOpen,
   zoom = 100,
-  onZoomChange
+  onZoomChange,
+  onLoadTemplate,
 }: HeaderProps) {
+  const [templates, setTemplates] = useState<{ name: string; mappings: CellMapping[] }[]>([])
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('excelTemplates')
+      const arr = raw ? JSON.parse(raw) : []
+      setTemplates(arr)
+    } catch (err) {
+      // ignore
+    }
+  }, [])
+
+  const handleSelectTemplate = (name: string) => {
+    const tpl = templates.find((t) => t.name === name)
+    if (!tpl) return
+    if (onLoadTemplate) onLoadTemplate(tpl.mappings)
+  }
   return (
     <header className="border-b border-border bg-card shrink-0">
       <div className="flex items-center justify-between px-4 py-2 h-14">
@@ -131,6 +152,20 @@ export function Header({
                 <Save className="h-3 w-3" />
                 <span className="hidden sm:inline">Guardar</span>
               </Button>
+              {templates.length > 0 && (
+                <select
+                  className="hidden sm:inline-block ml-2 rounded border px-2 py-1 text-sm"
+                  onChange={(e) => handleSelectTemplate(e.target.value)}
+                  defaultValue=""
+                >
+                  <option value="">Plantillas</option>
+                  {templates.map((t) => (
+                    <option key={t.name} value={t.name}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+              )}
             </>
           )}
         </div>

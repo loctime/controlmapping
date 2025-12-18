@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Plus, Trash2, Tag, CheckCircle2 } from "lucide-react"
+import { saveTemplate } from "@/lib/firebase"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet"
 import type { CellMapping, ExcelData } from "@/types/excel"
 
@@ -260,18 +261,11 @@ export function MappingPanel({
                   variant="outline"
                   size="sm"
                   className="w-full justify-start gap-2 bg-transparent h-8"
-                  onClick={() => {
+                  onClick={async () => {
                     const name = window.prompt('Nombre de la plantilla:')
                     if (!name) return
                     try {
-                      const key = 'excelTemplates'
-                      const raw = localStorage.getItem(key)
-                      const arr = raw ? JSON.parse(raw) : []
-                      const tpl = { name: name.trim(), mappings }
-                      const idx = arr.findIndex((t: any) => t.name === tpl.name)
-                      if (idx >= 0) arr[idx] = tpl
-                      else arr.push(tpl)
-                      localStorage.setItem(key, JSON.stringify(arr))
+                      await saveTemplate(name.trim(), mappings)
                       alert('Plantilla guardada')
                     } catch (err) {
                       // eslint-disable-next-line no-console

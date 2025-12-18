@@ -5,6 +5,7 @@ import { FileSpreadsheet, Save, RotateCcw, Menu, X, ZoomIn, ZoomOut, Maximize2 }
 import { Badge } from "@/components/ui/badge"
 import { Slider } from "@/components/ui/slider"
 import { useEffect, useState } from "react"
+import { getTemplates } from "@/lib/firebase"
 import type { CellMapping } from "@/types/excel"
 
 interface HeaderProps {
@@ -33,12 +34,21 @@ export function Header({
   const [templates, setTemplates] = useState<{ name: string; mappings: CellMapping[] }[]>([])
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem('excelTemplates')
-      const arr = raw ? JSON.parse(raw) : []
-      setTemplates(arr)
-    } catch (err) {
-      // ignore
+    let mounted = true
+    ;(async () => {
+      try {
+        const arr = await getTemplates()
+        console.log("getTemplates result:", arr)
+        if (!mounted) return
+        const mapped = (arr || []).map((t: any) => ({ name: t.name, mappings: t.mappings || [] }))
+        setTemplates(mapped)
+      } catch (err) {
+        console.error("getTemplates error:", err)
+        // ignore
+      }
+    })()
+    return () => {
+      mounted = false
     }
   }, [])
 
@@ -152,20 +162,22 @@ export function Header({
                 <Save className="h-3 w-3" />
                 <span className="hidden sm:inline">Guardar</span>
               </Button>
-              {templates.length > 0 && (
-                <select
-                  className="hidden sm:inline-block ml-2 rounded border px-2 py-1 text-sm"
-                  onChange={(e) => handleSelectTemplate(e.target.value)}
-                  defaultValue=""
-                >
-                  <option value="">Plantillas</option>
-                  {templates.map((t) => (
+              <select
+                className="sm:inline-block ml-2 rounded border px-2 py-1 text-sm"
+                onChange={(e) => handleSelectTemplate(e.target.value)}
+                defaultValue=""
+              >
+                <option value="">{templates.length ? "Plantillas" : "Cargando / Sin plantillas"}</option>
+                {templates.length === 0 ? (
+                  <option value="empty" disabled>No hay plantillas</option>
+                ) : (
+                  templates.map((t) => (
                     <option key={t.name} value={t.name}>
                       {t.name}
                     </option>
-                  ))}
-                </select>
-              )}
+                  ))
+                )}
+              </select>
             </>
           )}
         </div>

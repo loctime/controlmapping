@@ -1,19 +1,19 @@
-import { ExcelData, CellPosition, CellMapping } from './excel'
+import { ExcelData, CellMapping } from './excel'
 
 /**
  * A single field mapping in a persistent, UI-independent schema.
- * This object is JSON-serializable (no Date objects).
+ * The schema stores both the cell that contains the label/name and the cell
+ * that contains the value. No inference is performed when building the
+ * schema from UI mappings.
  */
 export interface ExcelFieldMapping {
   id: string
-  fieldName: string
+  /** reference to the cell that contains the human-readable field name (e.g. "B2") */
+  labelCellRef: string
+  /** reference to the cell that contains the value (e.g. "C2") */
+  valueCellRef: string
+  /** optional notes or sheet name if available */
   sheetName?: string
-  cellRef: string // e.g. "A1"
-  sampleValue?: string | number | null
-  valueType?: 'string' | 'number' | 'boolean' | 'date' | 'empty' | 'unknown'
-  position?: CellPosition
-  isMerged?: boolean
-  mergeRange?: string | null
   notes?: string
 }
 
@@ -65,48 +65,18 @@ function inferValueType(v: any): ExcelFieldMapping['valueType'] {
  */
 export function createSchemaFromMappings(
   mappings: CellMapping[],
-  excelData: ExcelData,
+  _excelData: ExcelData,
   options: CreateSchemaOptions = {}
 ): ExcelMappingSchema {
+  // Do NOT read cell contents or infer names here. Store the two references
+  // exactly as provided by the UI so the same template can be applied to
+  // other files.
   const fields = mappings.map((m) => {
-    let raw = m.cellId
-    let sheetName: string | undefined
-    let cellRef = raw
-
-    if (raw.includes('!')) {
-      const parts = raw.split('!')
-      sheetName = parts[0]
-      cellRef = parts.slice(1).join('!')
-    }
-
-    // find sheet if not explicitly provided
-    let sheet = undefined
-    if (!sheetName) {
-      sheet = excelData.sheets.find((s) => s.cells && Object.prototype.hasOwnProperty.call(s.cells, cellRef))
-      sheetName = sheet?.name
-    } else {
-      sheet = excelData.sheets.find((s) => s.name === sheetName)
-    }
-
-    const cell = sheet?.cells?.[cellRef]
-    const pos = sheet?.cellPositions?.[cellRef]
-    const sampleValue = cell?.value ?? null
-    const valueType = inferValueType(sampleValue)
-    const isMerged = !!cell?.isMerged
-    const mergeRange = cell?.mergeRange ?? null
-
-    const field = {
+    const field: ExcelFieldMapping = {
       id: m.id,
-      fieldName: m.label,
-      sheetName,
-      cellRef,
-      sampleValue,
-      valueType,
-      position: pos,
-      isMerged,
-      mergeRange,
-    } as ExcelFieldMapping
-
+      labelCellRef: m.labelCell,
+      valueCellRef: m.valueCell,
+    }
     return field
   })
 
@@ -135,20 +105,14 @@ export function validateExcelAgainstSchema(
   const errors: string[] = []
 
   for (const f of schema.fields) {
-    const sheetName = f.sheetName
-    if (!sheetName) {
-      errors.push(`Field '${f.fieldName}' (id=${f.id}) has no sheetName`)
-      continue
+    // Ensure both referenced cells exist in the provided workbook.
+    const valueExists = excelData.sheets.some((s) => s.cells && Object.prototype.hasOwnProperty.call(s.cells, f.valueCellRef))
+    const labelExists = excelData.sheets.some((s) => s.cells && Object.prototype.hasOwnProperty.call(s.cells, f.labelCellRef))
+    if (!valueExists) {
+      errors.push(`Value cell '${f.valueCellRef}' for field id=${f.id} not found in workbook`)
     }
-
-    const sheet = excelData.sheets.find((s) => s.name === sheetName)
-    if (!sheet) {
-      errors.push(`Sheet '${sheetName}' referenced by field '${f.fieldName}' (id=${f.id}) not found`)
-      continue
-    }
-
-    if (!sheet.cells || !Object.prototype.hasOwnProperty.call(sheet.cells, f.cellRef)) {
-      errors.push(`Cell '${f.cellRef}' for field '${f.fieldName}' (id=${f.id}) not found in sheet '${sheetName}'`)
+    if (!labelExists) {
+      errors.push(`Label cell '${f.labelCellRef}' for field id=${f.id} not found in workbook`)
     }
   }
 
@@ -172,23 +136,24 @@ export function extractDataFromExcel(
   const warnings: string[] = []
 
   for (const f of schema.fields) {
-    const key = f.fieldName
+    // For extraction, read the label cell to determine the field name/key and
+    // read the value cell for the value. If either is missing produce warnings.
+    const labelCellRef = f.labelCellRef
+    const valueCellRef = f.valueCellRef
 
-    const sheet = f.sheetName ? excelData.sheets.find((s) => s.name === f.sheetName) : undefined
-    if (!sheet) {
-      warnings.push(`Sheet '${f.sheetName}' for field '${key}' not found`)
-      data[key] = null
-      continue
-    }
+    const labelSheet = excelData.sheets.find((s) => s.cells && Object.prototype.hasOwnProperty.call(s.cells, labelCellRef))
+    const valueSheet = excelData.sheets.find((s) => s.cells && Object.prototype.hasOwnProperty.call(s.cells, valueCellRef))
 
-    const cell = sheet.cells?.[f.cellRef]
-    const val = cell?.value
+    const labelVal = labelSheet?.cells?.[labelCellRef]?.value
+    const valueVal = valueSheet?.cells?.[valueCellRef]?.value
 
-    if (val === null || val === undefined || val === '') {
-      warnings.push(`No value at ${f.sheetName}!${f.cellRef} for field '${key}'`)
-      data[key] = val ?? null
+    const key = labelVal !== null && labelVal !== undefined && String(labelVal).trim() !== '' ? String(labelVal) : labelCellRef
+
+    if (valueVal === null || valueVal === undefined || valueVal === '') {
+      warnings.push(`No value at ${valueSheet?.name ?? '<unknown>'}!${valueCellRef} for field '${key}'`)
+      data[key] = valueVal ?? null
     } else {
-      data[key] = val
+      data[key] = valueVal
     }
   }
 

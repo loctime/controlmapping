@@ -275,13 +275,11 @@ export default function Home() {
     setIsMappingPanelOpen(true) // Abrir panel cuando se selecciona una celda
   }
 
-  const handleAddMapping = (label: string) => {
-    if (!selectedCell) return
-
+  const handleAddMapping = (mapping: { labelCell: string; valueCell: string }) => {
     const newMapping: CellMapping = {
       id: Date.now().toString(),
-      cellId: selectedCell,
-      label,
+      labelCell: mapping.labelCell,
+      valueCell: mapping.valueCell,
       createdAt: new Date(),
     }
 
@@ -297,8 +295,8 @@ export default function Home() {
     const schema = {
       fileName: excelData?.fileName,
       mappings: mappings.map((m) => ({
-        cellId: m.cellId,
-        label: m.label,
+        labelCell: m.labelCell,
+        valueCell: m.valueCell,
       })),
       savedAt: new Date(),
     }

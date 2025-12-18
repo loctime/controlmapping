@@ -130,7 +130,10 @@ export function ExcelViewerFidel({
   // Memoizar mappings por cellId para búsqueda rápida
   const mappingsMap = useMemo(() => {
     const map = new Map<string, CellMapping>()
-    mappings.forEach(m => map.set(m.cellId, m))
+    mappings.forEach(m => {
+      if (m.labelCell) map.set(m.labelCell, m)
+      if (m.valueCell) map.set(m.valueCell, m)
+    })
     return map
   }, [mappings])
 
@@ -384,7 +387,10 @@ export function ExcelViewerFidel({
       const cellsToUpdate = new Set<string>()
       if (selectedCell) cellsToUpdate.add(selectedCell)
       if (hoveredCell) cellsToUpdate.add(hoveredCell)
-      mappings.forEach(m => cellsToUpdate.add(m.cellId))
+      mappings.forEach(m => {
+        cellsToUpdate.add(m.labelCell)
+        cellsToUpdate.add(m.valueCell)
+      })
 
       if (cellsToUpdate.size === 0) return
 
@@ -418,7 +424,7 @@ export function ExcelViewerFidel({
   }, [selectedCell, hoveredCell, mappingsMap, mappings])
 
   const getMappingLabel = useCallback((cellId: string) => {
-    return mappingsMap.get(cellId)?.label
+    return mappingsMap.get(cellId)?.labelCell
   }, [mappingsMap])
 
   // Sincronizar scroll horizontal entre barras superior e inferior

@@ -26,7 +26,7 @@ export function ExcelViewer({ data, mappings, selectedCell, onCellSelect, zoom, 
   const getCellStyle = (cellId: string) => {
     const cell = sheet.cells[cellId]
     const baseStyle = cell?.style || {}
-    const isMapped = mappings.some((m) => m.cellId === cellId)
+    const isMapped = mappings.some((m) => m.labelCell === cellId || m.valueCell === cellId)
     const isSelected = selectedCell === cellId
     const isHovered = hoveredCell === cellId
 
@@ -50,7 +50,7 @@ export function ExcelViewer({ data, mappings, selectedCell, onCellSelect, zoom, 
   }
 
   const getMappingLabel = (cellId: string) => {
-    return mappings.find((m) => m.cellId === cellId)?.label
+    return mappings.find((m) => m.valueCell === cellId || m.labelCell === cellId)?.labelCell
   }
 
   const formatCellDisplay = (cell?: { value?: string | number; style?: any }) => {

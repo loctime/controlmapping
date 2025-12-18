@@ -65,7 +65,9 @@ export interface CellStyle {
 
 export interface CellMapping {
   id: string
-  cellId: string
-  label: string
+  /** Cell reference that contains the field name (e.g. B2 -> "Nombre") */
+  labelCell: string
+  /** Cell reference that contains the value (e.g. C2 -> "Fernando") */
+  valueCell: string
   createdAt: Date
 }

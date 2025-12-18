@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -15,31 +15,15 @@ import type { CellMapping, ExcelData } from "@/types/excel"
 interface MappingPanelProps {
   selectedCell: string | null
   mappings: CellMapping[]
-  onAddMapping: (label: string) => void
+  onAddMapping: (mapping: Omit<CellMapping, 'id' | 'createdAt'>) => void
   onRemoveMapping: (id: string) => void
   isOpen: boolean
   onOpenChange: (open: boolean) => void
   excelData?: ExcelData | null
 }
 
-const COMMON_LABELS = [
-  "Razón social",
-  "Fecha de factura",
-  "Número de factura",
-  "Monto total",
-  "IVA",
-  "Subtotal",
-  "Cliente",
-  "Email",
-  "Teléfono",
-  "Dirección",
-  "Ciudad",
-  "Código postal",
-  "País",
-  "Producto",
-  "Cantidad",
-  "Precio unitario",
-]
+// NOTE: The mapping model is intentionally simple: each mapping stores two
+// cell refs: `labelCell` and `valueCell`. No automatic inference is performed.
 
 export function MappingPanel({ 
   selectedCell, 
@@ -50,19 +34,13 @@ export function MappingPanel({
   onOpenChange,
   excelData
 }: MappingPanelProps) {
-  const [customLabel, setCustomLabel] = useState("")
-  const [showCustomInput, setShowCustomInput] = useState(false)
-
-  const handleAddLabel = (label: string) => {
-    if (label.trim()) {
-      onAddMapping(label.trim())
-      setCustomLabel("")
-      setShowCustomInput(false)
-    }
-  }
+  const [draftLabelCell, setDraftLabelCell] = useState<string | null>(null)
+  const [draftValueCell, setDraftValueCell] = useState<string | null>(null)
+  const [pendingSelectFor, setPendingSelectFor] = useState<null | 'label' | 'value'>(null)
+  const [selectedRole, setSelectedRole] = useState<'label' | 'value'>('label')
 
   const isCellMapped = (cellId: string) => {
-    return mappings.some((m) => m.cellId === cellId)
+    return mappings.some((m) => m.labelCell === cellId || m.valueCell === cellId)
   }
 
   // Obtener el valor de la celda seleccionada
@@ -106,6 +84,47 @@ export function MappingPanel({
 
   const cellValue = getCellValue(selectedCell)
 
+  useEffect(() => {
+    // If we're waiting for the missing cell and the user selected a cell,
+    // behave differently depending on whether the panel is open:
+    // - If the panel is open: finalize the mapping immediately (existing behavior).
+    // - If the panel is closed: set the missing draft cell so when the user
+    //   re-opens the panel the second card shows the selection (do NOT finalize).
+    if (!selectedCell || !pendingSelectFor) return
+
+    // Panel closed: set the draft cell and keep things pending cleared.
+    if (!isOpen) {
+      if (pendingSelectFor === 'value' && draftLabelCell) {
+        if (selectedCell === draftLabelCell) return
+        setDraftValueCell(selectedCell)
+        setPendingSelectFor(null)
+        return
+      }
+      if (pendingSelectFor === 'label' && draftValueCell) {
+        if (selectedCell === draftValueCell) return
+        setDraftLabelCell(selectedCell)
+        setPendingSelectFor(null)
+        return
+      }
+      return
+    }
+
+    // Panel open: finalize mapping immediately (original behavior).
+    if (pendingSelectFor === 'value' && draftLabelCell) {
+      if (selectedCell === draftLabelCell) return
+      onAddMapping({ labelCell: draftLabelCell, valueCell: selectedCell })
+      setDraftLabelCell(null)
+      setPendingSelectFor(null)
+    }
+
+    if (pendingSelectFor === 'label' && draftValueCell) {
+      if (selectedCell === draftValueCell) return
+      onAddMapping({ labelCell: selectedCell, valueCell: draftValueCell })
+      setDraftValueCell(null)
+      setPendingSelectFor(null)
+    }
+  }, [selectedCell, pendingSelectFor, draftLabelCell, draftValueCell, onAddMapping, isOpen])
+
   return (
     <Sheet open={isOpen} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-full sm:w-[400px] p-0 flex flex-col overflow-hidden">
@@ -127,6 +146,7 @@ export function MappingPanel({
           <div className="space-y-6">
           {/* Selected Cell Section */}
           {selectedCell ? (
+            <>
             <Card className="p-4 bg-accent/50 border-primary/20">
               <div className="space-y-3">
                 <div className="flex items-center justify-between gap-2">
@@ -150,62 +170,103 @@ export function MappingPanel({
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    <Label className="text-xs text-muted-foreground">Etiquetas comunes</Label>
-                    <div className="flex flex-wrap gap-2">
-                      {COMMON_LABELS.slice(0, 6).map((label) => (
-                        <Button
-                          key={label}
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleAddLabel(label)}
-                          className="text-xs"
-                        >
-                          {label}
-                        </Button>
-                      ))}
-                    </div>
+                    <Label className="text-xs text-muted-foreground">Flujo: seleccione la celda que contiene el nombre (label) y luego la celda que contiene el valor</Label>
 
-                    {!showCustomInput ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setShowCustomInput(true)}
-                        className="w-full gap-2 h-8"
-                      >
-                        <Plus className="h-3 w-3" />
-                        Etiqueta personalizada
-                      </Button>
-                    ) : (
-                      <div className="flex gap-2">
-                        <Input
-                          value={customLabel}
-                          onChange={(e) => setCustomLabel(e.target.value)}
-                          placeholder="Nombre del campo..."
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              handleAddLabel(customLabel)
-                            } else if (e.key === "Escape") {
-                              setShowCustomInput(false)
-                              setCustomLabel("")
-                            }
-                          }}
-                          autoFocus
-                          className="flex-1 h-8"
-                        />
-                        <Button onClick={() => handleAddLabel(customLabel)} disabled={!customLabel.trim()} size="sm" className="h-8 px-3">
-                          <Plus className="h-3 w-3" />
+                    {!draftLabelCell && !draftValueCell ? (
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={selectedRole}
+                          onChange={(e) => setSelectedRole(e.target.value as 'label' | 'value')}
+                          className="text-sm h-8 px-2 rounded border border-border bg-card"
+                        >
+                          <option value="label">Nombre (label)</option>
+                          <option value="value">Dato (value)</option>
+                        </select>
+                        <Button size="sm" variant="secondary" className="h-8" onClick={() => {
+                          if (!selectedCell) return
+                          if (selectedRole === 'label') {
+                            setDraftLabelCell(selectedCell)
+                            setPendingSelectFor('value')
+                          } else {
+                            setDraftValueCell(selectedCell)
+                            setPendingSelectFor('label')
+                          }
+                        }}>
+                          Marcar como
                         </Button>
+                      </div>
+                    ) : draftLabelCell ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="font-mono text-xs">{draftLabelCell}</Badge>
+                          <div className="text-sm truncate">Label seleccionado</div>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button size="sm" onClick={() => setDraftLabelCell(null)}>Cancelar</Button>
+                          <Button size="sm" variant="primary" disabled={selectedCell === draftLabelCell} onClick={() => {
+                            if (!draftLabelCell || !selectedCell) return
+                            onAddMapping({ labelCell: draftLabelCell, valueCell: selectedCell })
+                            setDraftLabelCell(null)
+                          }}>
+                            Crear mapeo: {draftLabelCell} → {selectedCell}
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      // draftValueCell is set
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="font-mono text-xs">{draftValueCell}</Badge>
+                          <div className="text-sm truncate">Dato seleccionado</div>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button size="sm" onClick={() => setDraftValueCell(null)}>Cancelar</Button>
+                          <Button size="sm" variant="primary" disabled={selectedCell === draftValueCell} onClick={() => {
+                            if (!draftValueCell || !selectedCell) return
+                            // inverse: selectedCell will be label, draftValueCell is value
+                            onAddMapping({ labelCell: selectedCell, valueCell: draftValueCell })
+                            setDraftValueCell(null)
+                          }}>
+                            Crear mapeo: {selectedCell} → {draftValueCell}
+                          </Button>
+                        </div>
                       </div>
                     )}
                   </div>
                 )}
               </div>
             </Card>
+
+            {/* Second cell card: shows the counterpart cell (or placeholder) and a button to close the panel */}
+            <Card className="p-4 bg-muted/50 mt-3">
+              <Label className="text-sm font-medium text-foreground">Segunda celda</Label>
+              <div className="flex items-center justify-between mt-2">
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="font-mono text-xs">
+                    {(draftLabelCell ? (draftValueCell || 'No seleccionada') : (draftValueCell ? (draftLabelCell || 'No seleccionada') : 'No seleccionada'))}
+                  </Badge>
+                  <div className="text-sm text-muted-foreground">
+                    {draftLabelCell || draftValueCell ? (draftLabelCell ? 'Falta seleccionar dato (value)' : 'Falta seleccionar nombre (label)') : 'No hay segunda celda seleccionada'}
+                  </div>
+                </div>
+                <Button size="sm" variant="secondary" onClick={() => {
+                  // Ensure pendingSelectFor is set to the missing role so the next
+                  // cell selection (while the panel is closed) will populate the second card.
+                  if (!pendingSelectFor) {
+                    if (draftLabelCell) setPendingSelectFor('value')
+                    else if (draftValueCell) setPendingSelectFor('label')
+                  }
+                  onOpenChange(false)
+                }}>Seleccionar</Button>
+              </div>
+            </Card>
+            </>
           ) : (
             <Card className="p-4 bg-muted/50">
               <p className="text-sm text-muted-foreground text-center">
                 Haz clic en una celda del Excel para comenzar el mapeo
               </p>
+                          <Button size="sm" variant="outline" onClick={() => setPendingSelectFor('label')}>Mappear la celda que falta</Button>
             </Card>
           )}
 
@@ -222,17 +283,13 @@ export function MappingPanel({
                 {mappings.map((mapping) => (
                   <Card key={mapping.id} className="p-3 flex items-center justify-between gap-2 hover:bg-accent/50 transition-colors">
                     <div className="flex items-center gap-2 min-w-0 flex-1">
-                      <Badge variant="secondary" className="font-mono text-xs shrink-0">
-                        {mapping.cellId}
-                      </Badge>
-                      <span className="text-sm font-medium text-foreground truncate">{mapping.label}</span>
+                      <Badge variant="secondary" className="font-mono text-xs shrink-0">{mapping.valueCell}</Badge>
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-sm font-medium text-foreground truncate">{mapping.labelCell}</span>
+                        <span className="text-xs text-muted-foreground truncate">valor: {mapping.valueCell}</span>
+                      </div>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => onRemoveMapping(mapping.id)}
-                      className="h-7 w-7 p-0 text-destructive hover:text-destructive hover:bg-destructive/10 shrink-0"
-                    >
+                    <Button variant="ghost" size="sm" onClick={() => onRemoveMapping(mapping.id)} className="h-7 w-7 p-0 text-destructive hover:text-destructive hover:bg-destructive/10 shrink-0">
                       <Trash2 className="h-3 w-3" />
                     </Button>
                   </Card>
@@ -246,15 +303,10 @@ export function MappingPanel({
             <Card className="p-4 bg-muted/50">
               <Label className="text-xs font-medium text-muted-foreground mb-2 block">Acciones rápidas</Label>
               <div className="space-y-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full justify-start gap-2 bg-transparent h-8"
-                  onClick={() => {
-                    const schema = mappings.map((m) => `${m.cellId}: ${m.label}`).join("\n")
+                <Button variant="outline" size="sm" className="w-full justify-start gap-2 bg-transparent h-8" onClick={() => {
+                    const schema = mappings.map((m) => `${m.labelCell}: ${m.valueCell}`).join("\n")
                     navigator.clipboard.writeText(schema)
-                  }}
-                >
+                  }}>
                   Copiar esquema
                 </Button>
                 <Button

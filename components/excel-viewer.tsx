@@ -53,6 +53,41 @@ export function ExcelViewer({ data, mappings, selectedCell, onCellSelect, zoom, 
     return mappings.find((m) => m.cellId === cellId)?.label
   }
 
+  const formatCellDisplay = (cell?: { value?: string | number; style?: any }) => {
+    if (!cell || cell.value === null || cell.value === undefined) return ""
+    const { value, style } = cell as { value: string | number; style?: { numFmt?: string } }
+
+    const formatPercent = (num: number) => {
+      const pct = num * 100
+      const txt = pct % 1 === 0 ? String(pct) : pct.toFixed(2).replace(/\.?0+$/, '')
+      return `${txt}%`
+    }
+
+    // If style indicates percent format
+    if (style?.numFmt && typeof value === 'number') {
+      if (String(style.numFmt).includes('%')) return formatPercent(value)
+    }
+
+    if (typeof value === 'number') {
+      if (Math.abs(value) > 0 && Math.abs(value) < 1) return formatPercent(value)
+      return String(value)
+    }
+
+    // string: try parse
+    if (typeof value === 'string') {
+      const s = value.trim()
+      if (s.endsWith('%')) return s
+      const n = Number(s.replace(/,/g, ''))
+      if (!Number.isNaN(n) && Number.isFinite(n)) {
+        if (Math.abs(n) > 0 && Math.abs(n) < 1) return formatPercent(n)
+        return String(n)
+      }
+      return s
+    }
+
+    return String(value)
+  }
+
   return (
     <div className="flex flex-col h-full bg-muted/30">
       {/* Toolbar */}
@@ -137,7 +172,7 @@ export function ExcelViewer({ data, mappings, selectedCell, onCellSelect, zoom, 
                           className="relative border border-border min-w-[120px] h-8 px-2 text-sm text-foreground transition-all"
                         >
                           <div className="flex items-center justify-between gap-2">
-                            <span className="truncate">{cell?.value || ""}</span>
+                            <span className="truncate">{formatCellDisplay(cell)}</span>
                             {label && (
                               <span className="shrink-0 text-xs font-medium text-primary bg-primary/10 px-1.5 py-0.5 rounded">
                                 {label}

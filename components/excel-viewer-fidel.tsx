@@ -70,10 +70,34 @@ const styleToCSS = (style?: CellStyle): string => {
   return cssProps.join("; ")
 }
 
-const formatCellValue = (value: string | number): string => {
+const formatCellValue = (value: string | number, style?: CellStyle): string => {
   if (value === null || value === undefined) return ""
-  if (typeof value === "number") return value.toString()
-  return String(value)
+
+  const formatPercent = (num: number) => {
+    const pct = num * 100
+    return pct.toFixed(2).replace(/\.?0+$/, '') + "%"
+  }
+
+  // If style explicitly asks for percent
+  if (style?.numFmt && typeof value === 'number') {
+    if (String(style.numFmt).includes('%')) return formatPercent(value)
+  }
+
+  if (typeof value === 'number') {
+    if (Math.abs(value) > 0 && Math.abs(value) < 1) return formatPercent(value)
+    return String(value)
+  }
+
+  // string
+  const s = String(value).trim()
+  if (s === '') return ''
+  if (s.endsWith('%')) return s
+  const n = Number(s.replace(/,/g, ''))
+  if (!Number.isNaN(n) && Number.isFinite(n)) {
+    if (Math.abs(n) > 0 && Math.abs(n) < 1) return formatPercent(n)
+    return String(n)
+  }
+  return s
 }
 
 const escapeHtml = (text: string): string => {
@@ -220,7 +244,7 @@ export function ExcelViewerFidel({
           const cell = cellData.cell || sheet.cells[cellAddress]
           const style = cell?.style || {}
           const css = styleToCSS(style)
-          const value = cell?.value !== undefined ? formatCellValue(cell.value) : ""
+          const value = cell?.value !== undefined ? formatCellValue(cell.value, style) : ""
           
           const rowspan = cellData.mergeInfo?.rowspan || 1
           const colspan = cellData.mergeInfo?.colspan || 1

@@ -71,6 +71,35 @@ export function MappingPanel({
     if (!cell) return ""
     const value = cell.value
     if (value === null || value === undefined) return ""
+
+    const formatPercent = (num: number) => {
+      const pct = num * 100
+      // keep up to 2 decimals, but trim trailing zeros
+      const txt = pct.toFixed(2).replace(/\.?0+$/, '')
+      return `${txt}%`
+    }
+
+    // If it's already a number, check if looks like a fraction (0 < |x| < 1)
+    if (typeof value === 'number') {
+      if (Math.abs(value) > 0 && Math.abs(value) < 1) return formatPercent(value)
+      return String(value).trim()
+    }
+
+    // If it's a string, try to be helpful: handle percentage strings and numeric strings
+    if (typeof value === 'string') {
+      const s = value.trim()
+      if (s === '') return ''
+      // already a percent string
+      if (s.endsWith('%')) return s
+      // try parse number (allow commas as thousand separators)
+      const n = Number(s.replace(/,/g, ''))
+      if (!Number.isNaN(n) && Number.isFinite(n)) {
+        if (Math.abs(n) > 0 && Math.abs(n) < 1) return formatPercent(n)
+        return String(n).trim()
+      }
+      return s
+    }
+
     return String(value).trim()
   }
 
@@ -78,7 +107,7 @@ export function MappingPanel({
 
   return (
     <Sheet open={isOpen} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full sm:w-[400px] p-0 flex flex-col">
+      <SheetContent side="right" className="w-full sm:w-[400px] p-0 flex flex-col overflow-hidden">
         <SheetHeader className="px-6 py-4 border-b shrink-0">
           <div className="flex items-center justify-between">
             <div>
@@ -93,7 +122,7 @@ export function MappingPanel({
           </div>
         </SheetHeader>
 
-        <ScrollArea className="flex-1 px-6 py-4">
+        <ScrollArea className="flex-1 overflow-auto px-6 py-4 pb-6">
           <div className="space-y-6">
           {/* Selected Cell Section */}
           {selectedCell ? (

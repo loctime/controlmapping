@@ -126,49 +126,55 @@ export function FloatingMappingPanel({
       }}
       className="select-none"
     >
-      <Card className="w-[320px] shadow-xl border bg-background">
+      <Card className="w-[320px] shadow-2xl border bg-muted/95 backdrop-blur-sm p-0">
         {/* HEADER DRAG */}
         <div
           onMouseDown={onMouseDown}
-          className="cursor-move px-4 py-2 border-b bg-muted font-medium text-sm"
+          className="cursor-move px-3 py-2 border-b bg-primary text-primary-foreground font-medium text-sm"
         >
           🧩 Mapeo de campos
         </div>
 
-        <div className="p-4 space-y-3">
+        <div className="px-3 py-2 space-y-2">
           {mode === "idle" && (
-            <Button className="w-full" onClick={() => setMode("selectLabel")}>
+            <Button className="w-full h-8 text-sm" onClick={() => setMode("selectLabel")}>
               ➕ Nuevo campo
             </Button>
           )}
 
           {mode === "selectLabel" && (
-            <p className="text-sm text-muted-foreground">
-              Paso 1: seleccioná en el Excel el <b>nombre</b>
-            </p>
+            <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-md bg-blue-500/10 border border-blue-500/20">
+              <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0"></div>
+              <p className="text-xs text-foreground">
+                Paso 1: seleccioná en el Excel el <b>nombre</b>
+              </p>
+            </div>
           )}
 
           {mode === "selectValue" && (
-            <p className="text-sm text-muted-foreground">
-              Paso 2: seleccioná en el Excel el <b>valor</b>
-            </p>
+            <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-md bg-green-500/10 border border-green-500/20">
+              <div className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0"></div>
+              <p className="text-xs text-foreground">
+                Paso 2: seleccioná en el Excel el <b>valor</b>
+              </p>
+            </div>
           )}
 
           {(draftLabelCell || draftValueCell) && (
-            <div className="space-y-3">
+            <div className="space-y-2">
               <div>
-                <p className="text-xs text-muted-foreground mb-1">Nombre</p>
+                <p className="text-xs text-muted-foreground mb-1 font-medium">Nombre</p>
                 {draftLabelCell ? (
-                  <Badge variant="outline">
+                  <Badge variant="outline" className="bg-white shadow-sm border-border/50 font-mono text-xs">
                     {draftLabelCell} → {String(getCellValue(draftLabelCell))}
                   </Badge>
                 ) : (
-                  <span className="text-xs italic">no seleccionado</span>
+                  <span className="text-xs italic text-muted-foreground">no seleccionado</span>
                 )}
               </div>
 
               <div>
-                <Label htmlFor="manual-label" className="text-xs text-muted-foreground mb-1 block">
+                <Label htmlFor="manual-label" className="text-xs text-muted-foreground mb-0.5 block">
                   Nombre manual (opcional)
                 </Label>
                 <Input
@@ -177,28 +183,28 @@ export function FloatingMappingPanel({
                   placeholder="Escribir nombre personalizado..."
                   value={manualLabel}
                   onChange={(e) => setManualLabel(e.target.value)}
-                  className="h-8 text-sm"
+                  className="h-7 text-xs"
                 />
               </div>
 
               <div>
-                <p className="text-xs text-muted-foreground mb-1">Valor</p>
+                <p className="text-xs text-muted-foreground mb-1 font-medium">Valor</p>
                 {draftValueCell ? (
-                  <Badge variant="outline">
+                  <Badge variant="outline" className="bg-white shadow-sm border-border/50 font-mono text-xs">
                     {draftValueCell} → {String(getCellValue(draftValueCell))}
                   </Badge>
                 ) : (
-                  <span className="text-xs italic">no seleccionado</span>
+                  <span className="text-xs italic text-muted-foreground">no seleccionado</span>
                 )}
               </div>
             </div>
           )}
 
           {mode !== "idle" && (
-            <div className="flex gap-2 pt-2">
+            <div className="flex gap-1.5 pt-1">
               <Button
                 disabled={!canCreate}
-                className="flex-1"
+                className="flex-1 h-8 text-sm"
                 onClick={() => {
                   if (!draftLabelCell || !draftValueCell) return
                   onCreateMapping({
@@ -212,7 +218,7 @@ export function FloatingMappingPanel({
                 Crear
               </Button>
 
-              <Button variant="outline" onClick={resetDraft}>
+              <Button variant="outline" className="h-8 text-sm" onClick={resetDraft}>
                 Cancelar
               </Button>
             </div>

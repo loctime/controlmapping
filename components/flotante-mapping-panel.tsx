@@ -5,6 +5,8 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
+import { Switch } from "@/components/ui/switch"
+import { Label } from "@/components/ui/label"
 import { saveMapping } from "@/lib/firebase"
 import type { ExcelData, SchemaTemplate, SchemaFieldMapping, SchemaInstance } from "@/types/excel"
 
@@ -59,10 +61,12 @@ export function FloatingMappingPanel({
   const dragOffset = useRef({ x: 0, y: 0 })
   const draggingRef = useRef(false)
   const posRef = useRef({ x: 24, y: 96 })
+  const lastProcessedCellRef = useRef<string | null>(null)
   const [showAllMappedFields, setShowAllMappedFields] = useState(false)
   const [showSaveDialog, setShowSaveDialog] = useState(false)
   const [mappingName, setMappingName] = useState("")
   const [isSaving, setIsSaving] = useState(false)
+  const [fastMode, setFastMode] = useState(false)
 
   const getCellValue = (cellId: string | null) => {
     if (!cellId || !excelData) return ""
@@ -106,6 +110,25 @@ export function FloatingMappingPanel({
       setDraftCellOrColumn(column)
     }
   }, [selectedCell, mode, setDraftCellOrColumn])
+
+  // Modo veloz: confirmar automáticamente cuando se selecciona una celda en headerFields
+  useEffect(() => {
+    if (fastMode && mode === "mappingHeader" && draftCellOrColumn && currentHeaderField) {
+      // Evitar procesar la misma celda múltiples veces
+      if (lastProcessedCellRef.current === draftCellOrColumn) {
+        return
+      }
+      lastProcessedCellRef.current = draftCellOrColumn
+      
+      // Confirmar automáticamente y avanzar al siguiente campo
+      onHeaderFieldMapped(currentHeaderField.role, draftCellOrColumn)
+      setDraftCellOrColumn(null)
+      setCurrentHeaderFieldIndex(currentHeaderFieldIndex + 1)
+    } else if (draftCellOrColumn === null) {
+      // Resetear el ref cuando draftCellOrColumn se limpia
+      lastProcessedCellRef.current = null
+    }
+  }, [fastMode, mode, draftCellOrColumn, currentHeaderField, currentHeaderFieldIndex, onHeaderFieldMapped, setDraftCellOrColumn, setCurrentHeaderFieldIndex])
 
   // Sincronizar refs con estado
   useEffect(() => {
@@ -350,6 +373,18 @@ export function FloatingMappingPanel({
                 </p>
               </div>
 
+              {/* Toggle Modo Veloz */}
+              <div className="flex items-center justify-between px-2 py-1.5 rounded-md bg-muted/30 border border-border/50">
+                <Label htmlFor="fast-mode" className="text-xs text-foreground cursor-pointer">
+                  Modo veloz
+                </Label>
+                <Switch
+                  id="fast-mode"
+                  checked={fastMode}
+                  onCheckedChange={setFastMode}
+                />
+              </div>
+
               <div className="space-y-2 p-2 bg-muted/50 rounded-md">
                 <div>
                   <p className="text-base font-semibold text-foreground mb-0.5">
@@ -382,13 +417,15 @@ export function FloatingMappingPanel({
                     Volver
                   </Button>
                 )}
-                <Button
-                  disabled={!draftCellOrColumn}
-                  className="flex-1 h-8 text-sm"
-                  onClick={handleConfirmHeaderMapping}
-                >
-                  Confirmar
-                </Button>
+                {!fastMode && (
+                  <Button
+                    disabled={!draftCellOrColumn}
+                    className="flex-1 h-8 text-sm"
+                    onClick={handleConfirmHeaderMapping}
+                  >
+                    Confirmar
+                  </Button>
+                )}
                 {!currentHeaderField.required && (
                   <Button 
                     variant="outline" 

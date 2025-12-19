@@ -4,7 +4,7 @@ import { useState } from "react"
 import * as XLSX from "xlsx"
 import { FileUploadZone } from "@/components/file-upload-zone"
 import { ExcelViewerFidel } from "@/components/excel-viewer-fidel"
-import { MappingPanel } from "@/components/mapping-panel"
+import { FloatingMappingPanel } from "@/components/flotante-mapping-panel"
 import { Header } from "@/components/header"
 import type { CellMapping, ExcelData } from "@/types/excel"
 
@@ -15,6 +15,9 @@ export default function Home() {
   const [selectedCell, setSelectedCell] = useState<string | null>(null)
   const [zoom, setZoom] = useState(100)
   const [isMappingPanelOpen, setIsMappingPanelOpen] = useState(false)
+  const [mode, setMode] = useState<"idle" | "selectLabel" | "selectValue">("idle")
+  const [draftLabelCell, setDraftLabelCell] = useState<string | null>(null)
+  const [draftValueCell, setDraftValueCell] = useState<string | null>(null)
 
   const handleFileUpload = async (file: File) => {
     setIsLoading(true)
@@ -275,16 +278,15 @@ export default function Home() {
     setIsMappingPanelOpen(true) // Abrir panel cuando se selecciona una celda
   }
 
-  const handleAddMapping = (mapping: { labelCell: string; valueCell: string }) => {
-    const newMapping: CellMapping = {
-      id: Date.now().toString(),
-      labelCell: mapping.labelCell,
-      valueCell: mapping.valueCell,
-      createdAt: new Date(),
-    }
-
-    setMappings([...mappings, newMapping])
-    setSelectedCell(null)
+  const handleCreateMapping = (mapping: Omit<CellMapping, "id" | "createdAt">) => {
+    setMappings(prev => [
+      ...prev,
+      {
+        id: crypto.randomUUID(),
+        createdAt: new Date(),
+        ...mapping,
+      },
+    ])
   }
 
   const handleRemoveMapping = (id: string) => {
@@ -321,6 +323,9 @@ export default function Home() {
           setMappings([])
           setSelectedCell(null)
           setIsMappingPanelOpen(false)
+          setMode("idle")
+          setDraftLabelCell(null)
+          setDraftValueCell(null)
         }}
         onToggleMappingPanel={() => setIsMappingPanelOpen(!isMappingPanelOpen)}
         isMappingPanelOpen={isMappingPanelOpen}
@@ -351,15 +356,17 @@ export default function Home() {
               />
             </div>
             
-            {/* Mapping Panel como sidebar lateral */}
-            <MappingPanel
-              selectedCell={selectedCell}
-              mappings={mappings}
-              onAddMapping={handleAddMapping}
-              onRemoveMapping={handleRemoveMapping}
-              isOpen={isMappingPanelOpen}
-              onOpenChange={setIsMappingPanelOpen}
+            {/* Panel flotante de mapeo */}
+            <FloatingMappingPanel
               excelData={excelData}
+              selectedCell={selectedCell}
+              mode={mode}
+              setMode={setMode}
+              draftLabelCell={draftLabelCell}
+              setDraftLabelCell={setDraftLabelCell}
+              draftValueCell={draftValueCell}
+              setDraftValueCell={setDraftValueCell}
+              onCreateMapping={handleCreateMapping}
             />
           </>
         )}

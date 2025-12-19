@@ -69,5 +69,7 @@ export interface CellMapping {
   labelCell: string
   /** Cell reference that contains the value (e.g. C2 -> "Fernando") */
   valueCell: string
+  /** Optional manual override for the label. If provided, this is used instead of the labelCell value */
+  labelOverride?: string
   createdAt: Date
 }

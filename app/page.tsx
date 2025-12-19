@@ -6,18 +6,120 @@ import { FileUploadZone } from "@/components/file-upload-zone"
 import { ExcelViewerFidel } from "@/components/excel-viewer-fidel"
 import { FloatingMappingPanel } from "@/components/flotante-mapping-panel"
 import { Header } from "@/components/header"
-import type { CellMapping, ExcelData } from "@/types/excel"
+import type { CellMapping, ExcelData, SchemaTemplate, SchemaInstance, SchemaFieldMapping } from "@/types/excel"
+
+// Schema Template de Auditoría
+const AUDIT_SCHEMA_TEMPLATE: SchemaTemplate = {
+  schemaId: "audit-standard-v1",
+  name: "Auditoría estándar",
+  description: "Schema base para auditorías de higiene, seguridad u operativas",
+  version: 1,
+  type: "audit",
+  headerFields: [
+    {
+      role: "operacion",
+      label: "Operación",
+      required: true,
+      description: "Nombre o identificación de la operación auditada"
+    },
+    {
+      role: "responsable_operacion",
+      label: "Responsable de la operación",
+      required: false
+    },
+    {
+      role: "cliente",
+      label: "Cliente",
+      required: true
+    },
+    {
+      role: "fecha",
+      label: "Fecha de auditoría",
+      required: true,
+      dataType: "date"
+    },
+    {
+      role: "auditor",
+      label: "Auditor",
+      required: true
+    },
+    {
+      role: "cantidad_items",
+      label: "Cantidad de ítems",
+      required: true,
+      dataType: "number"
+    },
+    {
+      role: "cumplimiento_total_pct",
+      label: "% de cumplimiento total",
+      required: true,
+      dataType: "percentage"
+    },
+    {
+      role: "puntos_obtenidos",
+      label: "Puntos obtenidos",
+      required: false,
+      dataType: "number"
+    }
+  ],
+  table: {
+    description: "Tabla principal de preguntas / ítems auditados",
+    columns: [
+      {
+        role: "pregunta",
+        label: "Pregunta / Ítem",
+        required: true,
+        dataType: "string"
+      },
+      {
+        role: "cumple",
+        label: "Cumple",
+        required: false,
+        dataType: "boolean"
+      },
+      {
+        role: "cumple_parcial",
+        label: "Cumple parcial",
+        required: false,
+        dataType: "boolean"
+      },
+      {
+        role: "no_cumple",
+        label: "No cumple",
+        required: false,
+        dataType: "boolean"
+      },
+      {
+        role: "no_aplica",
+        label: "No aplica",
+        required: false,
+        dataType: "boolean"
+      },
+      {
+        role: "observaciones",
+        label: "Observaciones",
+        required: false,
+        dataType: "string"
+      }
+    ]
+  }
+}
 
 export default function Home() {
   const [excelData, setExcelData] = useState<ExcelData | null>(null)
   const [isLoading, setIsLoading] = useState(false)
-  const [mappings, setMappings] = useState<CellMapping[]>([])
+  const [mappings, setMappings] = useState<CellMapping[]>([]) // Mantener para compatibilidad con ExcelViewerFidel
   const [selectedCell, setSelectedCell] = useState<string | null>(null)
   const [zoom, setZoom] = useState(100)
   const [isMappingPanelOpen, setIsMappingPanelOpen] = useState(false)
-  const [mode, setMode] = useState<"idle" | "selectLabel" | "selectValue">("idle")
-  const [draftLabelCell, setDraftLabelCell] = useState<string | null>(null)
-  const [draftValueCell, setDraftValueCell] = useState<string | null>(null)
+  
+  // Schema template y mapeos
+  const [schemaTemplate] = useState<SchemaTemplate>(AUDIT_SCHEMA_TEMPLATE)
+  const [headerMappings, setHeaderMappings] = useState<SchemaFieldMapping[]>([])
+  const [tableMappings, setTableMappings] = useState<SchemaFieldMapping[]>([])
+  const [currentHeaderFieldIndex, setCurrentHeaderFieldIndex] = useState(0)
+  const [currentTableFieldIndex, setCurrentTableFieldIndex] = useState(0)
+  const [draftCellOrColumn, setDraftCellOrColumn] = useState<string | null>(null)
 
   const handleFileUpload = async (file: File) => {
     setIsLoading(true)
@@ -278,7 +380,30 @@ export default function Home() {
     setIsMappingPanelOpen(true) // Abrir panel cuando se selecciona una celda
   }
 
+  const handleHeaderFieldMapped = (role: string, cell: string) => {
+    setHeaderMappings(prev => [
+      ...prev,
+      {
+        role,
+        cellOrColumn: cell,
+        isColumn: false,
+      }
+    ])
+  }
+
+  const handleTableFieldMapped = (role: string, column: string) => {
+    setTableMappings(prev => [
+      ...prev,
+      {
+        role,
+        cellOrColumn: column,
+        isColumn: true,
+      }
+    ])
+  }
+
   const handleCreateMapping = (mapping: Omit<CellMapping, "id" | "createdAt">) => {
+    // Mantener para compatibilidad, pero ya no se usa con schema templates
     setMappings(prev => [
       ...prev,
       {
@@ -294,21 +419,23 @@ export default function Home() {
   }
 
   const handleSaveSchema = () => {
-    const schema = {
-      fileName: excelData?.fileName,
-      mappings: mappings.map((m) => ({
-        labelCell: m.labelCell,
-        valueCell: m.valueCell,
-      })),
-      savedAt: new Date(),
+    if (!excelData) return
+
+    const schemaInstance: SchemaInstance = {
+      schemaId: schemaTemplate.schemaId,
+      schemaVersion: schemaTemplate.version,
+      fileName: excelData.fileName,
+      headerMappings,
+      tableMappings,
+      createdAt: new Date(),
     }
 
-    console.log("Schema guardado:", schema)
-    const blob = new Blob([JSON.stringify(schema, null, 2)], { type: "application/json" })
+    console.log("Schema instance guardado:", schemaInstance)
+    const blob = new Blob([JSON.stringify(schemaInstance, null, 2)], { type: "application/json" })
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
     a.href = url
-    a.download = `mapping-schema-${Date.now()}.json`
+    a.download = `schema-instance-${Date.now()}.json`
     a.click()
   }
 
@@ -316,16 +443,18 @@ export default function Home() {
     <div className="h-screen flex flex-col bg-background">
       <Header
         fileName={excelData?.fileName}
-        mappingsCount={mappings.length}
+        mappingsCount={headerMappings.length + tableMappings.length}
         onSaveSchema={handleSaveSchema}
         onReset={() => {
           setExcelData(null)
           setMappings([])
           setSelectedCell(null)
           setIsMappingPanelOpen(false)
-          setMode("idle")
-          setDraftLabelCell(null)
-          setDraftValueCell(null)
+          setHeaderMappings([])
+          setTableMappings([])
+          setCurrentHeaderFieldIndex(0)
+          setCurrentTableFieldIndex(0)
+          setDraftCellOrColumn(null)
         }}
         onToggleMappingPanel={() => setIsMappingPanelOpen(!isMappingPanelOpen)}
         isMappingPanelOpen={isMappingPanelOpen}
@@ -360,13 +489,17 @@ export default function Home() {
             <FloatingMappingPanel
               excelData={excelData}
               selectedCell={selectedCell}
-              mode={mode}
-              setMode={setMode}
-              draftLabelCell={draftLabelCell}
-              setDraftLabelCell={setDraftLabelCell}
-              draftValueCell={draftValueCell}
-              setDraftValueCell={setDraftValueCell}
-              onCreateMapping={handleCreateMapping}
+              schemaTemplate={schemaTemplate}
+              headerMappings={headerMappings}
+              tableMappings={tableMappings}
+              currentHeaderFieldIndex={currentHeaderFieldIndex}
+              setCurrentHeaderFieldIndex={setCurrentHeaderFieldIndex}
+              currentTableFieldIndex={currentTableFieldIndex}
+              setCurrentTableFieldIndex={setCurrentTableFieldIndex}
+              draftCellOrColumn={draftCellOrColumn}
+              setDraftCellOrColumn={setDraftCellOrColumn}
+              onHeaderFieldMapped={handleHeaderFieldMapped}
+              onTableFieldMapped={handleTableFieldMapped}
             />
           </>
         )}

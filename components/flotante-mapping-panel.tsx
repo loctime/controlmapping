@@ -4,38 +4,45 @@ import { useRef, useState, useEffect } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import type { ExcelData, CellMapping } from "@/types/excel"
+import type { ExcelData, SchemaTemplate, SchemaFieldMapping } from "@/types/excel"
 
-type MappingMode = "idle" | "selectLabel" | "selectValue"
+type MappingMode = "idle" | "mappingHeader" | "mappingTable"
 
 interface FloatingMappingPanelProps {
   excelData?: ExcelData | null
   selectedCell: string | null
 
-  mode: MappingMode
-  setMode: (mode: MappingMode) => void
+  schemaTemplate: SchemaTemplate
+  headerMappings: SchemaFieldMapping[]
+  tableMappings: SchemaFieldMapping[]
 
-  draftLabelCell: string | null
-  setDraftLabelCell: (cell: string | null) => void
+  currentHeaderFieldIndex: number
+  setCurrentHeaderFieldIndex: (index: number) => void
 
-  draftValueCell: string | null
-  setDraftValueCell: (cell: string | null) => void
+  currentTableFieldIndex: number
+  setCurrentTableFieldIndex: (index: number) => void
 
-  onCreateMapping: (mapping: Omit<CellMapping, "id" | "createdAt">) => void
+  draftCellOrColumn: string | null
+  setDraftCellOrColumn: (cellOrColumn: string | null) => void
+
+  onHeaderFieldMapped: (role: string, cell: string) => void
+  onTableFieldMapped: (role: string, column: string) => void
 }
 
 export function FloatingMappingPanel({
   excelData,
   selectedCell,
-  mode,
-  setMode,
-  draftLabelCell,
-  setDraftLabelCell,
-  draftValueCell,
-  setDraftValueCell,
-  onCreateMapping,
+  schemaTemplate,
+  headerMappings,
+  tableMappings,
+  currentHeaderFieldIndex,
+  setCurrentHeaderFieldIndex,
+  currentTableFieldIndex,
+  setCurrentTableFieldIndex,
+  draftCellOrColumn,
+  setDraftCellOrColumn,
+  onHeaderFieldMapped,
+  onTableFieldMapped,
 }: FloatingMappingPanelProps) {
   const panelRef = useRef<HTMLDivElement>(null)
 
@@ -44,7 +51,6 @@ export function FloatingMappingPanel({
   const dragOffset = useRef({ x: 0, y: 0 })
   const draggingRef = useRef(false)
   const posRef = useRef({ x: 24, y: 96 })
-  const [manualLabel, setManualLabel] = useState<string>("")
 
   const getCellValue = (cellId: string | null) => {
     if (!cellId || !excelData) return ""
@@ -59,19 +65,35 @@ export function FloatingMappingPanel({
     return String(val)
   }
 
-  // reaccionar al click en el Excel según el paso
+  // Determinar el modo actual basado en qué fase estamos
+  const mode: MappingMode = 
+    currentHeaderFieldIndex < schemaTemplate.headerFields.length 
+      ? "mappingHeader" 
+      : currentTableFieldIndex < schemaTemplate.table.columns.length
+      ? "mappingTable"
+      : "idle"
+
+  // Obtener el campo actual que se está mapeando
+  const currentHeaderField = schemaTemplate.headerFields[currentHeaderFieldIndex]
+  const currentTableField = schemaTemplate.table.columns[currentTableFieldIndex]
+
+  // Extraer columna de una referencia de celda (e.g. "B2" -> "B")
+  const extractColumn = (cellRef: string): string => {
+    return cellRef.replace(/[0-9]/g, '')
+  }
+
+  // Reaccionar al click en el Excel según el paso
   useEffect(() => {
     if (!selectedCell) return
 
-    if (mode === "selectLabel") {
-      setDraftLabelCell(selectedCell)
-      setMode("selectValue")
+    if (mode === "mappingHeader") {
+      setDraftCellOrColumn(selectedCell)
+    } else if (mode === "mappingTable") {
+      // Para columnas, extraer la letra de la columna
+      const column = extractColumn(selectedCell)
+      setDraftCellOrColumn(column)
     }
-
-    if (mode === "selectValue") {
-      setDraftValueCell(selectedCell)
-    }
-  }, [selectedCell, mode, setDraftLabelCell, setDraftValueCell, setMode])
+  }, [selectedCell, mode, setDraftCellOrColumn])
 
   // Sincronizar refs con estado
   useEffect(() => {
@@ -114,14 +136,42 @@ export function FloatingMappingPanel({
     }
   }, [])
 
-  const resetDraft = () => {
-    setDraftLabelCell(null)
-    setDraftValueCell(null)
-    setManualLabel("")
-    setMode("idle")
+  const handleConfirmHeaderMapping = () => {
+    if (!draftCellOrColumn || !currentHeaderField) return
+    onHeaderFieldMapped(currentHeaderField.role, draftCellOrColumn)
+    setDraftCellOrColumn(null)
+    setCurrentHeaderFieldIndex(currentHeaderFieldIndex + 1)
   }
 
-  const canCreate = Boolean(draftLabelCell && draftValueCell)
+  const handleConfirmTableMapping = () => {
+    if (!draftCellOrColumn || !currentTableField) return
+    onTableFieldMapped(currentTableField.role, draftCellOrColumn)
+    setDraftCellOrColumn(null)
+    setCurrentTableFieldIndex(currentTableFieldIndex + 1)
+  }
+
+  const handleSkipHeaderField = () => {
+    if (!currentHeaderField) return
+    // Solo permitir saltar si no es requerido
+    if (!currentHeaderField.required) {
+      setCurrentHeaderFieldIndex(currentHeaderFieldIndex + 1)
+      setDraftCellOrColumn(null)
+    }
+  }
+
+  const handleSkipTableField = () => {
+    if (!currentTableField) return
+    // Solo permitir saltar si no es requerido
+    if (!currentTableField.required) {
+      setCurrentTableFieldIndex(currentTableFieldIndex + 1)
+      setDraftCellOrColumn(null)
+    }
+  }
+
+  // Calcular progreso
+  const totalFields = schemaTemplate.headerFields.length + schemaTemplate.table.columns.length
+  const mappedFields = headerMappings.length + tableMappings.length
+  const overallProgress = totalFields > 0 ? (mappedFields / totalFields) * 100 : 0
 
   return (
     <div
@@ -143,109 +193,134 @@ export function FloatingMappingPanel({
           🧩 Mapeo de campos
         </div>
 
-        <div className="px-3 py-1 space-y-1.5">
-          {mode === "idle" && (
-            <Button className="w-full h-8 text-sm" onClick={() => setMode("selectLabel")}>
-              ➕ Nuevo campo
-            </Button>
-          )}
-
-          {mode === "selectLabel" && (
-            <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-md bg-blue-500/10 border border-blue-500/20">
-              <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0"></div>
-              <p className="text-xs text-foreground">
-                Paso 1: seleccioná en el Excel el <b>nombre</b>
-              </p>
+        <div className="px-3 py-2 space-y-2">
+          {/* Barra de progreso */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-muted-foreground">Progreso general</span>
+              <span className="font-medium">{mappedFields}/{totalFields}</span>
             </div>
+            <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+              <div 
+                className="h-full bg-primary transition-all duration-300"
+                style={{ width: `${overallProgress}%` }}
+              />
+            </div>
+          </div>
+
+          {/* Mapeo de Header Fields */}
+          {mode === "mappingHeader" && currentHeaderField && (
+            <>
+              <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-md bg-blue-500/10 border border-blue-500/20">
+                <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0"></div>
+                <p className="text-xs text-foreground">
+                  <b>Fase 1:</b> Campos del encabezado ({currentHeaderFieldIndex + 1}/{schemaTemplate.headerFields.length})
+                </p>
+              </div>
+
+              <div className="space-y-2 p-2 bg-muted/50 rounded-md">
+                <div>
+                  <p className="text-xs font-medium text-foreground mb-0.5">
+                    {currentHeaderField.label}
+                    {currentHeaderField.required && <span className="text-destructive ml-1">*</span>}
+                  </p>
+                  {currentHeaderField.description && (
+                    <p className="text-xs text-muted-foreground">{currentHeaderField.description}</p>
+                  )}
+                </div>
+
+                {draftCellOrColumn ? (
+                  <Badge variant="outline" className="bg-white shadow-sm border-border/50 font-mono text-xs">
+                    {draftCellOrColumn} → {renderValue(getCellValue(draftCellOrColumn))}
+                  </Badge>
+                ) : (
+                  <p className="text-xs italic text-muted-foreground">
+                    Seleccioná la celda en el Excel que contiene este dato
+                  </p>
+                )}
+              </div>
+
+              <div className="flex gap-1.5 pt-1">
+                <Button
+                  disabled={!draftCellOrColumn}
+                  className="flex-1 h-8 text-sm"
+                  onClick={handleConfirmHeaderMapping}
+                >
+                  Confirmar
+                </Button>
+                {!currentHeaderField.required && (
+                  <Button 
+                    variant="outline" 
+                    className="h-8 text-sm" 
+                    onClick={handleSkipHeaderField}
+                  >
+                    Omitir
+                  </Button>
+                )}
+              </div>
+            </>
           )}
 
-          {mode === "selectValue" && (
+          {/* Mapeo de Table Columns */}
+          {mode === "mappingTable" && currentTableField && (
+            <>
+              <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-md bg-green-500/10 border border-green-500/20">
+                <div className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0"></div>
+                <p className="text-xs text-foreground">
+                  <b>Fase 2:</b> Columnas de la tabla ({currentTableFieldIndex + 1}/{schemaTemplate.table.columns.length})
+                </p>
+              </div>
+
+              <div className="space-y-2 p-2 bg-muted/50 rounded-md">
+                <div>
+                  <p className="text-xs font-medium text-foreground mb-0.5">
+                    {currentTableField.label}
+                    {currentTableField.required && <span className="text-destructive ml-1">*</span>}
+                  </p>
+                  {currentTableField.description && (
+                    <p className="text-xs text-muted-foreground">{currentTableField.description}</p>
+                  )}
+                </div>
+
+                {draftCellOrColumn ? (
+                  <Badge variant="outline" className="bg-white shadow-sm border-border/50 font-mono text-xs">
+                    Columna {draftCellOrColumn}
+                  </Badge>
+                ) : (
+                  <p className="text-xs italic text-muted-foreground">
+                    Seleccioná cualquier celda de la columna en el Excel
+                  </p>
+                )}
+              </div>
+
+              <div className="flex gap-1.5 pt-1">
+                <Button
+                  disabled={!draftCellOrColumn}
+                  className="flex-1 h-8 text-sm"
+                  onClick={handleConfirmTableMapping}
+                >
+                  Confirmar
+                </Button>
+                {!currentTableField.required && (
+                  <Button 
+                    variant="outline" 
+                    className="h-8 text-sm" 
+                    onClick={handleSkipTableField}
+                  >
+                    Omitir
+                  </Button>
+                )}
+              </div>
+            </>
+          )}
+
+          {/* Completado */}
+          {mode === "idle" && (
             <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-md bg-green-500/10 border border-green-500/20">
               <div className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0"></div>
               <p className="text-xs text-foreground">
-                Paso 2: seleccioná en el Excel el <b>valor</b>
+                ✅ Mapeo completado
               </p>
-            </div>
-          )}
-
-          {(draftLabelCell || draftValueCell) && (
-            <div className="space-y-2">
-              <div>
-                <div className="flex items-center gap-2 mb-0.5 w-full">
-  <span className="flex items-center gap-1">
-    <p className="text-xs text-muted-foreground font-medium">Nombre</p>
-    {draftLabelCell && (
-      <button
-        type="button"
-        onClick={() => {
-          setDraftLabelCell(null);
-          setMode("selectLabel");
-        }}
-        className="px-1 py-0.5 text-xs border border-primary rounded bg-primary/10 text-primary hover:bg-primary/20 transition-shadow"
-        tabIndex={0}
-        title="Editar celda de nombre"
-      >
-        Editar
-      </button>
-    )}
-  </span>
-  <Label htmlFor="manual-label" className="text-xs text-muted-foreground font-normal ml-auto">
-    Nombre manual (opcional)
-  </Label>
-</div>
-                <div className="flex gap-1">
-                  {draftLabelCell ? (
-                    <Badge variant="outline" className="bg-white shadow-sm border-border/50 font-mono text-xs whitespace-normal break-words max-w-[140px]">
-                      {draftLabelCell} → {renderValue(getCellValue(draftLabelCell))}
-                    </Badge>
-                  ) : (
-                    <span className="text-xs italic text-muted-foreground">no seleccionado</span>
-                  )}
-                  <Input
-                    id="manual-label"
-                    type="text"
-                    placeholder="Personalizado..."
-                    value={manualLabel}
-                    onChange={(e) => setManualLabel(e.target.value)}
-                    className="h-7 text-xs max-w-[120px] ml-auto"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <p className="text-xs text-muted-foreground mb-1 font-medium">Valor</p>
-                {draftValueCell ? (
-                  <Badge variant="outline" className="bg-white shadow-sm border-border/50 font-mono text-xs whitespace-normal break-words max-w-[140px]">
-                    {draftValueCell} → {String(getCellValue(draftValueCell))}
-                  </Badge>
-                ) : (
-                  <span className="text-xs italic text-muted-foreground">no seleccionado</span>
-                )}
-              </div>
-            </div>
-          )}
-
-          {mode !== "idle" && (
-            <div className="flex gap-1.5 pt-1">
-              <Button
-                disabled={!canCreate}
-                className="flex-1 h-8 text-sm"
-                onClick={() => {
-                  if (!draftLabelCell || !draftValueCell) return
-                  onCreateMapping({
-                    labelCell: draftLabelCell,
-                    valueCell: draftValueCell,
-                    ...(manualLabel.trim() && { labelOverride: manualLabel.trim() }),
-                  })
-                  resetDraft()
-                }}
-              >
-                Crear
-              </Button>
-
-              <Button variant="outline" className="h-8 text-sm" onClick={resetDraft}>
-                Cancelar
-              </Button>
             </div>
           )}
         </div>

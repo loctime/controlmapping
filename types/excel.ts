@@ -73,3 +73,47 @@ export interface CellMapping {
   labelOverride?: string
   createdAt: Date
 }
+
+// Schema Template Types
+export type DataType = "string" | "number" | "date" | "boolean" | "percentage"
+
+export interface SchemaField {
+  role: string
+  label: string
+  required: boolean
+  description?: string
+  dataType?: DataType
+}
+
+export interface SchemaTable {
+  description?: string
+  columns: SchemaField[]
+}
+
+export interface SchemaTemplate {
+  schemaId: string
+  name: string
+  description?: string
+  version: number
+  type: string
+  headerFields: SchemaField[]
+  table: SchemaTable
+}
+
+// Schema Instance - mapeo de un template a un Excel específico
+export interface SchemaFieldMapping {
+  role: string
+  /** Para headerFields: referencia de celda (e.g. "B2") */
+  /** Para table.columns: referencia de columna (e.g. "C") */
+  cellOrColumn: string
+  isColumn: boolean // true si es columna, false si es celda
+}
+
+export interface SchemaInstance {
+  schemaId: string
+  schemaVersion: number
+  fileName: string
+  headerMappings: SchemaFieldMapping[] // Mapeos de headerFields
+  tableMappings: SchemaFieldMapping[] // Mapeos de table.columns
+  createdAt: Date
+}

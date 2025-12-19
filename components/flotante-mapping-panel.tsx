@@ -124,7 +124,7 @@ export function FloatingMappingPanel({
         left: pos.x,
         zIndex: 50,
       }}
-      className="select-none"
+      className="select-none border border-border rounded-lg"
     >
       <Card className="w-[320px] shadow-2xl border bg-muted/95 backdrop-blur-sm p-0">
         {/* HEADER DRAG */}
@@ -163,28 +163,43 @@ export function FloatingMappingPanel({
           {(draftLabelCell || draftValueCell) && (
             <div className="space-y-2">
               <div>
-                <p className="text-xs text-muted-foreground mb-1 font-medium">Nombre</p>
-                {draftLabelCell ? (
-                  <Badge variant="outline" className="bg-white shadow-sm border-border/50 font-mono text-xs">
-                    {draftLabelCell} → {String(getCellValue(draftLabelCell))}
-                  </Badge>
-                ) : (
-                  <span className="text-xs italic text-muted-foreground">no seleccionado</span>
-                )}
-              </div>
-
-              <div>
-                <Label htmlFor="manual-label" className="text-xs text-muted-foreground mb-0.5 block">
-                  Nombre manual (opcional)
-                </Label>
-                <Input
-                  id="manual-label"
-                  type="text"
-                  placeholder="Escribir nombre personalizado..."
-                  value={manualLabel}
-                  onChange={(e) => setManualLabel(e.target.value)}
-                  className="h-7 text-xs"
-                />
+                <div className="flex items-center gap-1 mb-0.5">
+  <p className="text-xs text-muted-foreground font-medium">Nombre</p>
+  <Label htmlFor="manual-label" className="text-xs text-muted-foreground font-normal ml-2">
+    Nombre manual (opcional)
+  </Label>
+  {draftLabelCell && (
+    <button
+      type="button"
+      onClick={() => {
+        setDraftLabelCell(null);
+        setMode("selectLabel");
+      }}
+      className="ml-2 px-1 py-0.5 text-xs border border-primary rounded bg-primary/10 text-primary hover:bg-primary/20 transition-shadow"
+      tabIndex={0}
+      title="Editar celda de nombre"
+    >
+      Editar
+    </button>
+  )}
+</div>
+                <div className="flex gap-1">
+                  {draftLabelCell ? (
+                    <Badge variant="outline" className="bg-white shadow-sm border-border/50 font-mono text-xs">
+                      {draftLabelCell} → {String(getCellValue(draftLabelCell))}
+                    </Badge>
+                  ) : (
+                    <span className="text-xs italic text-muted-foreground">no seleccionado</span>
+                  )}
+                  <Input
+                    id="manual-label"
+                    type="text"
+                    placeholder="Personalizado..."
+                    value={manualLabel}
+                    onChange={(e) => setManualLabel(e.target.value)}
+                    className="h-7 text-xs max-w-[120px] ml-auto"
+                  />
+                </div>
               </div>
 
               <div>

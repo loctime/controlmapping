@@ -250,6 +250,24 @@ export function FloatingMappingPanel({
   const mappedFields = headerMappings.length + tableMappings.length
   const overallProgress = totalFields > 0 ? (mappedFields / totalFields) * 100 : 0
 
+  // Calcular progreso de la fase actual
+  const getPhaseProgress = () => {
+    if (mode === "mappingHeader") {
+      const current = headerMappings.length
+      const total = schemaTemplate.headerFields.length
+      const progress = total > 0 ? (current / total) * 100 : 0
+      return { current, total, progress, label: "Fase 1 — Campos del encabezado" }
+    } else if (mode === "mappingTable") {
+      const current = tableMappings.length
+      const total = schemaTemplate.table.columns.length
+      const progress = total > 0 ? (current / total) * 100 : 0
+      return { current, total, progress, label: "Fase 2 — Columnas de la tabla" }
+    }
+    return { current: mappedFields, total: totalFields, progress: overallProgress, label: "Completado" }
+  }
+
+  const phaseProgress = getPhaseProgress()
+
   // Obtener el label de un campo por su role
   const getFieldLabel = (role: string): string => {
     const field = schemaTemplate.headerFields.find(f => f.role === role)
@@ -343,67 +361,77 @@ export function FloatingMappingPanel({
         {/* HEADER DRAG */}
         <div
           onMouseDown={onMouseDown}
-          className="cursor-move px-3 py-2 border-b bg-primary text-primary-foreground font-medium text-sm"
+          className="cursor-move px-3 py-2.5 border-b bg-primary text-primary-foreground"
         >
-          🧩 Mapeo de campos
-        </div>
-
-        <div className="px-3 pb-2 space-y-2">
-          {/* Barra de progreso */}
-          <div className="space-y-1">
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-muted-foreground">Progreso general</span>
-              <span className="font-medium">{mappedFields}/{totalFields}</span>
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className="font-medium text-sm">🧩 Mapeo de campos</span>
+              <span className="text-xs opacity-90">{mappedFields}/{totalFields}</span>
             </div>
-            <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-primary transition-all duration-300"
-                style={{ width: `${overallProgress}%` }}
-              />
-            </div>
-          </div>
-
-          {/* Mapeo de Header Fields */}
-          {mode === "mappingHeader" && currentHeaderField && (
-            <>
-              <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-md bg-blue-500/10 border border-blue-500/20">
-                <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0"></div>
-                <p className="text-xs text-foreground">
-                  <b>Fase 1:</b> Campos del encabezado ({currentHeaderFieldIndex + 1}/{schemaTemplate.headerFields.length})
-                </p>
-              </div>
-
-              {/* Toggle Modo Veloz */}
-              <div className="flex items-center justify-between px-2 py-1.5 rounded-md bg-muted/30 border border-border/50">
-                <Label htmlFor="fast-mode" className="text-xs text-foreground cursor-pointer">
-                  Modo veloz
+            {mode === "mappingHeader" && (
+              <div className="flex items-center gap-1.5">
+                <Label htmlFor="fast-mode" className="text-xs cursor-pointer opacity-90">
+                  Veloz
                 </Label>
                 <Switch
                   id="fast-mode"
                   checked={fastMode}
                   onCheckedChange={setFastMode}
+                  className="scale-75"
                 />
               </div>
+            )}
+          </div>
+        </div>
 
-              <div className="space-y-2 p-2 bg-muted/50 rounded-md">
+        <div className="px-3 pb-2 space-y-3">
+          {/* Información de fase actual */}
+          {mode !== "idle" && (
+            <div className="pt-1.5 pb-1 space-y-1.5 border-b border-border/30">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-medium text-foreground">{phaseProgress.label}</span>
+                <span className="text-muted-foreground">{phaseProgress.current}/{phaseProgress.total}</span>
+              </div>
+              <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-primary transition-all duration-300"
+                  style={{ width: `${phaseProgress.progress}%` }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Mapeo de Header Fields */}
+          {mode === "mappingHeader" && currentHeaderField && (
+            <>
+              {/* Campo activo - elemento más visible */}
+              <div className="space-y-3">
                 <div>
-                  <p className="text-base font-semibold text-foreground mb-0.5">
+                  <h3 className="text-xl font-bold text-foreground mb-1">
                     {currentHeaderField.label}
                     {currentHeaderField.required && <span className="text-destructive ml-1">*</span>}
-                  </p>
+                  </h3>
                   {currentHeaderField.description && (
-                    <p className="text-xs text-muted-foreground">{currentHeaderField.description}</p>
+                    <p className="text-sm text-muted-foreground leading-relaxed">{currentHeaderField.description}</p>
                   )}
                 </div>
 
+                {/* Celda seleccionada */}
                 {draftCellOrColumn ? (
-                  <Badge variant="outline" className="bg-white shadow-sm border-border/50 font-mono text-xs">
-                    {draftCellOrColumn} → {renderValue(getCellValue(draftCellOrColumn))}
-                  </Badge>
+                  <div className="space-y-1.5 p-3 bg-muted/50 rounded-md border border-border/50">
+                    <div className="font-mono text-lg font-semibold text-foreground">
+                      {draftCellOrColumn}
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      {renderValue(getCellValue(draftCellOrColumn))}
+                    </div>
+                  </div>
                 ) : (
-                  <p className="text-xs italic text-muted-foreground">
-                    Seleccioná la celda en el Excel que contiene este dato
-                  </p>
+                  <div className="p-3 bg-muted/30 rounded-md border border-dashed border-border/50">
+                    <p className="text-sm italic text-muted-foreground text-center">
+                      Seleccioná la celda en el Excel que contiene este dato
+                    </p>
+                  </div>
                 )}
               </div>
 
@@ -475,32 +503,34 @@ export function FloatingMappingPanel({
           {/* Mapeo de Table Columns */}
           {mode === "mappingTable" && currentTableField && (
             <>
-              <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-md bg-green-500/10 border border-green-500/20">
-                <div className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0"></div>
-                <p className="text-xs text-foreground">
-                  <b>Fase 2:</b> Columnas de la tabla ({currentTableFieldIndex + 1}/{schemaTemplate.table.columns.length})
-                </p>
-              </div>
-
-              <div className="space-y-2 p-2 bg-muted/50 rounded-md">
+              {/* Campo activo - elemento más visible */}
+              <div className="space-y-3">
                 <div>
-                  <p className="text-base font-semibold text-foreground mb-0.5">
+                  <h3 className="text-xl font-bold text-foreground mb-1">
                     {currentTableField.label}
                     {currentTableField.required && <span className="text-destructive ml-1">*</span>}
-                  </p>
+                  </h3>
                   {currentTableField.description && (
-                    <p className="text-xs text-muted-foreground">{currentTableField.description}</p>
+                    <p className="text-sm text-muted-foreground leading-relaxed">{currentTableField.description}</p>
                   )}
                 </div>
 
+                {/* Columna seleccionada */}
                 {draftCellOrColumn ? (
-                  <Badge variant="outline" className="bg-white shadow-sm border-border/50 font-mono text-xs">
-                    Columna {draftCellOrColumn}
-                  </Badge>
+                  <div className="space-y-1.5 p-3 bg-muted/50 rounded-md border border-border/50">
+                    <div className="font-mono text-lg font-semibold text-foreground">
+                      Columna {draftCellOrColumn}
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      Seleccionada
+                    </div>
+                  </div>
                 ) : (
-                  <p className="text-xs italic text-muted-foreground">
-                    Seleccioná cualquier celda de la columna en el Excel
-                  </p>
+                  <div className="p-3 bg-muted/30 rounded-md border border-dashed border-border/50">
+                    <p className="text-sm italic text-muted-foreground text-center">
+                      Seleccioná cualquier celda de la columna en el Excel
+                    </p>
+                  </div>
                 )}
               </div>
 
@@ -572,7 +602,7 @@ export function FloatingMappingPanel({
             <>
               <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-md bg-green-500/10 border border-green-500/20">
                 <div className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0"></div>
-                <p className="text-xs text-foreground">
+                <p className="text-sm font-medium text-foreground">
                   ✅ Mapeo completado
                 </p>
               </div>

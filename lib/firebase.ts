@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp } from "firebase/app"
-import { getFirestore, collection, getDocs, query, where, addDoc, setDoc, doc } from "firebase/firestore"
+import { getFirestore, collection, getDocs, query, where, addDoc, setDoc, doc, getDoc } from "firebase/firestore"
 import type { SchemaTemplate, SchemaInstance } from "@/types/excel"
 
 const firebaseConfig = {
@@ -93,6 +93,58 @@ export async function saveMapping(mapping: SchemaInstance & { name: string }): P
   } catch (err) {
     console.error('saveMapping error', err)
     throw err
+  }
+}
+
+/**
+ * Obtiene todos los mappings guardados de la colección "mappings"
+ */
+export async function getMappings(): Promise<(SchemaInstance & { id: string; name: string })[]> {
+  try {
+    const col = collection(db, 'mappings')
+    const snap = await getDocs(col)
+    return snap.docs.map((d) => {
+      const data = d.data()
+      return {
+        id: d.id,
+        name: data.name,
+        schemaId: data.schemaId,
+        schemaVersion: data.schemaVersion,
+        fileName: data.fileName || '',
+        headerMappings: data.headerMappings || [],
+        tableMappings: data.tableMappings || [],
+        createdAt: data.createdAt?.toDate() || new Date(),
+      } as SchemaInstance & { id: string; name: string }
+    })
+  } catch (err) {
+    console.error('getMappings error', err)
+    return []
+  }
+}
+
+/**
+ * Obtiene un SchemaTemplate por su schemaId
+ */
+export async function getSchemaTemplate(schemaId: string): Promise<SchemaTemplate | null> {
+  try {
+    const docRef = doc(db, 'schemaTemplates', schemaId)
+    const docSnap = await getDoc(docRef)
+    if (docSnap.exists()) {
+      const data = docSnap.data()
+      return {
+        schemaId: data.schemaId,
+        name: data.name,
+        description: data.description,
+        version: data.version,
+        type: data.type,
+        headerFields: data.headerFields || [],
+        table: data.table || { columns: [] },
+      } as SchemaTemplate
+    }
+    return null
+  } catch (err) {
+    console.error('getSchemaTemplate error', err)
+    return null
   }
 }
 

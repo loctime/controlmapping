@@ -51,6 +51,14 @@ export function FloatingMappingPanel({
     return excelData.sheets[0]?.cells[cellId]?.value ?? ""
   }
 
+  // Formatea numérico porcentual sólo para la visualización
+  const renderValue = (val: any) => {
+    if (typeof val === 'number' && Math.abs(val) > 0 && Math.abs(val) < 1) {
+      return (val * 100).toFixed(2).replace(/\.?0+$/, '') + '%'
+    }
+    return String(val)
+  }
+
   // reaccionar al click en el Excel según el paso
   useEffect(() => {
     if (!selectedCell) return
@@ -135,7 +143,7 @@ export function FloatingMappingPanel({
           🧩 Mapeo de campos
         </div>
 
-        <div className="px-3 py-2 space-y-2">
+        <div className="px-3 py-1 space-y-1.5">
           {mode === "idle" && (
             <Button className="w-full h-8 text-sm" onClick={() => setMode("selectLabel")}>
               ➕ Nuevo campo
@@ -163,30 +171,32 @@ export function FloatingMappingPanel({
           {(draftLabelCell || draftValueCell) && (
             <div className="space-y-2">
               <div>
-                <div className="flex items-center gap-1 mb-0.5">
-  <p className="text-xs text-muted-foreground font-medium">Nombre</p>
-  <Label htmlFor="manual-label" className="text-xs text-muted-foreground font-normal ml-2">
+                <div className="flex items-center gap-2 mb-0.5 w-full">
+  <span className="flex items-center gap-1">
+    <p className="text-xs text-muted-foreground font-medium">Nombre</p>
+    {draftLabelCell && (
+      <button
+        type="button"
+        onClick={() => {
+          setDraftLabelCell(null);
+          setMode("selectLabel");
+        }}
+        className="px-1 py-0.5 text-xs border border-primary rounded bg-primary/10 text-primary hover:bg-primary/20 transition-shadow"
+        tabIndex={0}
+        title="Editar celda de nombre"
+      >
+        Editar
+      </button>
+    )}
+  </span>
+  <Label htmlFor="manual-label" className="text-xs text-muted-foreground font-normal ml-auto">
     Nombre manual (opcional)
   </Label>
-  {draftLabelCell && (
-    <button
-      type="button"
-      onClick={() => {
-        setDraftLabelCell(null);
-        setMode("selectLabel");
-      }}
-      className="ml-2 px-1 py-0.5 text-xs border border-primary rounded bg-primary/10 text-primary hover:bg-primary/20 transition-shadow"
-      tabIndex={0}
-      title="Editar celda de nombre"
-    >
-      Editar
-    </button>
-  )}
 </div>
                 <div className="flex gap-1">
                   {draftLabelCell ? (
-                    <Badge variant="outline" className="bg-white shadow-sm border-border/50 font-mono text-xs">
-                      {draftLabelCell} → {String(getCellValue(draftLabelCell))}
+                    <Badge variant="outline" className="bg-white shadow-sm border-border/50 font-mono text-xs whitespace-normal break-words max-w-[140px]">
+                      {draftLabelCell} → {renderValue(getCellValue(draftLabelCell))}
                     </Badge>
                   ) : (
                     <span className="text-xs italic text-muted-foreground">no seleccionado</span>
@@ -205,7 +215,7 @@ export function FloatingMappingPanel({
               <div>
                 <p className="text-xs text-muted-foreground mb-1 font-medium">Valor</p>
                 {draftValueCell ? (
-                  <Badge variant="outline" className="bg-white shadow-sm border-border/50 font-mono text-xs">
+                  <Badge variant="outline" className="bg-white shadow-sm border-border/50 font-mono text-xs whitespace-normal break-words max-w-[140px]">
                     {draftValueCell} → {String(getCellValue(draftValueCell))}
                   </Badge>
                 ) : (

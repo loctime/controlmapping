@@ -4,7 +4,9 @@ import { useRef, useState, useEffect } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import type { ExcelData, SchemaTemplate, SchemaFieldMapping } from "@/types/excel"
+import { Input } from "@/components/ui/input"
+import { saveMapping } from "@/lib/firebase"
+import type { ExcelData, SchemaTemplate, SchemaFieldMapping, SchemaInstance } from "@/types/excel"
 
 type MappingMode = "idle" | "mappingHeader" | "mappingTable"
 
@@ -27,6 +29,9 @@ interface FloatingMappingPanelProps {
 
   onHeaderFieldMapped: (role: string, cell: string) => void
   onTableFieldMapped: (role: string, column: string) => void
+  onRemoveLastHeaderMapping: () => void
+  onRemoveLastTableMapping: () => void
+  onSave?: (instance: SchemaInstance) => void
 }
 
 export function FloatingMappingPanel({
@@ -43,6 +48,9 @@ export function FloatingMappingPanel({
   setDraftCellOrColumn,
   onHeaderFieldMapped,
   onTableFieldMapped,
+  onRemoveLastHeaderMapping,
+  onRemoveLastTableMapping,
+  onSave,
 }: FloatingMappingPanelProps) {
   const panelRef = useRef<HTMLDivElement>(null)
 
@@ -51,6 +59,10 @@ export function FloatingMappingPanel({
   const dragOffset = useRef({ x: 0, y: 0 })
   const draggingRef = useRef(false)
   const posRef = useRef({ x: 24, y: 96 })
+  const [showAllMappedFields, setShowAllMappedFields] = useState(false)
+  const [showSaveDialog, setShowSaveDialog] = useState(false)
+  const [mappingName, setMappingName] = useState("")
+  const [isSaving, setIsSaving] = useState(false)
 
   const getCellValue = (cellId: string | null) => {
     if (!cellId || !excelData) return ""
@@ -168,10 +180,130 @@ export function FloatingMappingPanel({
     }
   }
 
+  // Funciones para volver al paso anterior con rollback real
+  const handleGoBackHeader = () => {
+    if (currentHeaderFieldIndex > 0) {
+      // El índice actual indica cuántos campos hemos confirmado
+      // Si estamos en índice N, significa que hemos confirmado N campos
+      // Al retroceder, eliminamos el último mapping confirmado
+      if (headerMappings.length > 0 && headerMappings.length === currentHeaderFieldIndex) {
+        onRemoveLastHeaderMapping()
+      }
+      // Retroceder al paso anterior (que quedará sin confirmar)
+      setCurrentHeaderFieldIndex(currentHeaderFieldIndex - 1)
+      setDraftCellOrColumn(null)
+    }
+  }
+
+  const handleGoBackTable = () => {
+    if (currentTableFieldIndex > 0) {
+      // Si estamos en índice N de tabla (N > 0), significa que hemos confirmado N columnas
+      // Al retroceder, eliminamos el último mapping confirmado
+      if (tableMappings.length > 0 && tableMappings.length === currentTableFieldIndex) {
+        onRemoveLastTableMapping()
+      }
+      // Retroceder al paso anterior (que quedará sin confirmar)
+      setCurrentTableFieldIndex(currentTableFieldIndex - 1)
+      setDraftCellOrColumn(null)
+    } else if (currentTableFieldIndex === 0 && currentHeaderFieldIndex > 0) {
+      // Si estamos en el primer campo de tabla (índice 0), volver al último campo de header
+      // No hay mappings de tabla que eliminar porque aún no hemos confirmado ninguno
+      // Retroceder al último campo de header
+      // El índice de tabla debe quedar fuera de rango para indicar que estamos en headers
+      setCurrentTableFieldIndex(schemaTemplate.table.columns.length)
+      // Eliminar el último mapping de header confirmado
+      // currentHeaderFieldIndex debería ser igual a schemaTemplate.headerFields.length cuando estamos en tabla
+      // Entonces el último mapping confirmado es el último del array
+      if (headerMappings.length > 0) {
+        onRemoveLastHeaderMapping()
+      }
+      setCurrentHeaderFieldIndex(currentHeaderFieldIndex - 1)
+      setDraftCellOrColumn(null)
+    }
+  }
+
   // Calcular progreso
   const totalFields = schemaTemplate.headerFields.length + schemaTemplate.table.columns.length
   const mappedFields = headerMappings.length + tableMappings.length
   const overallProgress = totalFields > 0 ? (mappedFields / totalFields) * 100 : 0
+
+  // Obtener el label de un campo por su role
+  const getFieldLabel = (role: string): string => {
+    const field = schemaTemplate.headerFields.find(f => f.role === role)
+    return field?.label || role
+  }
+
+  // Preparar datos del resumen de campos mapeados
+  const mappedHeaderFields = headerMappings.map(mapping => {
+    const label = getFieldLabel(mapping.role)
+    const cell = mapping.cellOrColumn
+    const value = renderValue(getCellValue(cell))
+    return { label, cell, value }
+  })
+
+  const visibleMappedFields = showAllMappedFields 
+    ? mappedHeaderFields 
+    : mappedHeaderFields.slice(0, 3)
+  const hasMoreFields = mappedHeaderFields.length > 3
+
+  // Verificar si todos los campos requeridos están mapeados
+  const allRequiredFieldsMapped = (): boolean => {
+    // Verificar headerFields requeridos
+    const requiredHeaderFields = schemaTemplate.headerFields.filter(f => f.required)
+    const mappedHeaderRoles = new Set(headerMappings.map(m => m.role))
+    const allRequiredHeadersMapped = requiredHeaderFields.every(f => mappedHeaderRoles.has(f.role))
+
+    // Verificar table.columns requeridos
+    const requiredTableFields = schemaTemplate.table.columns.filter(f => f.required)
+    const mappedTableRoles = new Set(tableMappings.map(m => m.role))
+    const allRequiredTablesMapped = requiredTableFields.every(f => mappedTableRoles.has(f.role))
+
+    return allRequiredHeadersMapped && allRequiredTablesMapped
+  }
+
+  const canSave = allRequiredFieldsMapped()
+
+  // Abrir diálogo para guardar mapeo
+  const handleSaveMappingClick = () => {
+    if (!canSave) return
+    setShowSaveDialog(true)
+    setMappingName("")
+  }
+
+  // Guardar mapeo en Firestore
+  const handleSaveMapping = async () => {
+    if (!excelData || !canSave || !mappingName.trim()) return
+
+    setIsSaving(true)
+    try {
+      const instance: SchemaInstance = {
+        schemaId: schemaTemplate.schemaId,
+        schemaVersion: schemaTemplate.version,
+        fileName: excelData.fileName,
+        headerMappings: [...headerMappings],
+        tableMappings: [...tableMappings],
+        createdAt: new Date(),
+      }
+
+      await saveMapping({
+        ...instance,
+        name: mappingName.trim(),
+      })
+
+      console.log("Mapeo guardado exitosamente:", mappingName.trim())
+      setShowSaveDialog(false)
+      setMappingName("")
+      
+      if (onSave) {
+        onSave(instance)
+      }
+    } catch (error) {
+      console.error("Error al guardar mapeo:", error)
+      alert("Error al guardar el mapeo. Por favor, intenta nuevamente.")
+    } finally {
+      setIsSaving(false)
+    }
+  }
 
   return (
     <div
@@ -193,7 +325,7 @@ export function FloatingMappingPanel({
           🧩 Mapeo de campos
         </div>
 
-        <div className="px-3 py-2 space-y-2">
+        <div className="px-3 pb-2 space-y-2">
           {/* Barra de progreso */}
           <div className="space-y-1">
             <div className="flex items-center justify-between text-xs">
@@ -220,7 +352,7 @@ export function FloatingMappingPanel({
 
               <div className="space-y-2 p-2 bg-muted/50 rounded-md">
                 <div>
-                  <p className="text-xs font-medium text-foreground mb-0.5">
+                  <p className="text-base font-semibold text-foreground mb-0.5">
                     {currentHeaderField.label}
                     {currentHeaderField.required && <span className="text-destructive ml-1">*</span>}
                   </p>
@@ -241,6 +373,15 @@ export function FloatingMappingPanel({
               </div>
 
               <div className="flex gap-1.5 pt-1">
+                {currentHeaderFieldIndex > 0 && (
+                  <Button
+                    variant="outline"
+                    className="h-8 text-sm"
+                    onClick={handleGoBackHeader}
+                  >
+                    Volver
+                  </Button>
+                )}
                 <Button
                   disabled={!draftCellOrColumn}
                   className="flex-1 h-8 text-sm"
@@ -257,7 +398,40 @@ export function FloatingMappingPanel({
                     Omitir
                   </Button>
                 )}
+                {canSave && (
+                  <Button
+                    variant="outline"
+                    className="h-8 text-sm"
+                    onClick={handleSaveMappingClick}
+                  >
+                    Guardar
+                  </Button>
+                )}
               </div>
+
+              {/* Resumen de campos mapeados */}
+              {mappedHeaderFields.length > 0 && (
+                <div className="pt-2 border-t border-border/50">
+                  <p className="text-xs text-muted-foreground mb-1.5 font-medium">Resumen de campos mapeados</p>
+                  <div className="space-y-1">
+                    {visibleMappedFields.map((field, idx) => (
+                      <p key={idx} className="text-xs text-muted-foreground leading-relaxed">
+                        <span className="font-medium text-foreground">{field.label}:</span>{" "}
+                        <span className="font-mono">{field.cell}</span> → "{field.value}"
+                      </p>
+                    ))}
+                  </div>
+                  {hasMoreFields && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAllMappedFields(!showAllMappedFields)}
+                      className="text-xs text-muted-foreground hover:text-foreground mt-1.5 underline"
+                    >
+                      {showAllMappedFields ? "Ver menos…" : "Ver más…"}
+                    </button>
+                  )}
+                </div>
+              )}
             </>
           )}
 
@@ -273,7 +447,7 @@ export function FloatingMappingPanel({
 
               <div className="space-y-2 p-2 bg-muted/50 rounded-md">
                 <div>
-                  <p className="text-xs font-medium text-foreground mb-0.5">
+                  <p className="text-base font-semibold text-foreground mb-0.5">
                     {currentTableField.label}
                     {currentTableField.required && <span className="text-destructive ml-1">*</span>}
                   </p>
@@ -294,6 +468,15 @@ export function FloatingMappingPanel({
               </div>
 
               <div className="flex gap-1.5 pt-1">
+                {(currentTableFieldIndex > 0 || headerMappings.length > 0) && (
+                  <Button
+                    variant="outline"
+                    className="h-8 text-sm"
+                    onClick={handleGoBackTable}
+                  >
+                    Volver
+                  </Button>
+                )}
                 <Button
                   disabled={!draftCellOrColumn}
                   className="flex-1 h-8 text-sm"
@@ -310,17 +493,140 @@ export function FloatingMappingPanel({
                     Omitir
                   </Button>
                 )}
+                {canSave && (
+                  <Button
+                    variant="outline"
+                    className="h-8 text-sm"
+                    onClick={handleSaveMappingClick}
+                  >
+                    Guardar
+                  </Button>
+                )}
               </div>
+
+              {/* Resumen de campos mapeados */}
+              {mappedHeaderFields.length > 0 && (
+                <div className="pt-2 border-t border-border/50">
+                  <p className="text-xs text-muted-foreground mb-1.5 font-medium">Resumen de campos mapeados</p>
+                  <div className="space-y-1">
+                    {visibleMappedFields.map((field, idx) => (
+                      <p key={idx} className="text-xs text-muted-foreground leading-relaxed">
+                        <span className="font-medium text-foreground">{field.label}:</span>{" "}
+                        <span className="font-mono">{field.cell}</span> → "{field.value}"
+                      </p>
+                    ))}
+                  </div>
+                  {hasMoreFields && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAllMappedFields(!showAllMappedFields)}
+                      className="text-xs text-muted-foreground hover:text-foreground mt-1.5 underline"
+                    >
+                      {showAllMappedFields ? "Ver menos…" : "Ver más…"}
+                    </button>
+                  )}
+                </div>
+              )}
             </>
           )}
 
           {/* Completado */}
           {mode === "idle" && (
-            <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-md bg-green-500/10 border border-green-500/20">
-              <div className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0"></div>
-              <p className="text-xs text-foreground">
-                ✅ Mapeo completado
-              </p>
+            <>
+              <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-md bg-green-500/10 border border-green-500/20">
+                <div className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0"></div>
+                <p className="text-xs text-foreground">
+                  ✅ Mapeo completado
+                </p>
+              </div>
+
+              {/* Resumen de campos mapeados */}
+              {mappedHeaderFields.length > 0 && (
+                <div className="pt-2 border-t border-border/50">
+                  <p className="text-xs text-muted-foreground mb-1.5 font-medium">Resumen de campos mapeados</p>
+                  <div className="space-y-1">
+                    {visibleMappedFields.map((field, idx) => (
+                      <p key={idx} className="text-xs text-muted-foreground leading-relaxed">
+                        <span className="font-medium text-foreground">{field.label}:</span>{" "}
+                        <span className="font-mono">{field.cell}</span> → "{field.value}"
+                      </p>
+                    ))}
+                  </div>
+                  {hasMoreFields && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAllMappedFields(!showAllMappedFields)}
+                      className="text-xs text-muted-foreground hover:text-foreground mt-1.5 underline"
+                    >
+                      {showAllMappedFields ? "Ver menos…" : "Ver más…"}
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Botón Guardar cuando está completado */}
+              {canSave ? (
+                <div className="pt-2 border-t border-border/50">
+                  <Button
+                    className="w-full h-8 text-sm"
+                    onClick={handleSaveMappingClick}
+                  >
+                    Guardar mapeo
+                  </Button>
+                </div>
+              ) : (
+                <div className="pt-2 border-t border-border/50">
+                  <p className="text-xs text-muted-foreground text-center">
+                    Completa todos los campos requeridos para guardar
+                  </p>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Diálogo para ingresar nombre del mapeo */}
+          {showSaveDialog && (
+            <div className="pt-2 border-t border-border/50">
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-foreground">Nombre del mapeo</p>
+                <Input
+                  type="text"
+                  placeholder="Ej: Auditoría Casa Blanca - Enero 2024"
+                  value={mappingName}
+                  onChange={(e) => setMappingName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && mappingName.trim() && !isSaving) {
+                      handleSaveMapping()
+                    }
+                    if (e.key === "Escape") {
+                      setShowSaveDialog(false)
+                      setMappingName("")
+                    }
+                  }}
+                  className="h-8 text-xs"
+                  autoFocus
+                />
+                <div className="flex gap-1.5">
+                  <Button
+                    disabled={!mappingName.trim() || isSaving}
+                    className="flex-1 h-8 text-sm"
+                    onClick={handleSaveMapping}
+                  >
+                    {isSaving ? "Guardando..." : "Guardar"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="h-8 text-sm"
+                    onClick={() => {
+                      setShowSaveDialog(false)
+                      setMappingName("")
+                    }}
+                    disabled={isSaving}
+                  >
+                    Cancelar
+                  </Button>
+                </div>
+              </div>
             </div>
           )}
         </div>

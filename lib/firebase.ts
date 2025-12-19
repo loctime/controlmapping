@@ -1,5 +1,6 @@
 import { initializeApp, getApps, getApp } from "firebase/app"
-import { getFirestore, collection, getDocs, query, where, addDoc, setDoc } from "firebase/firestore"
+import { getFirestore, collection, getDocs, query, where, addDoc, setDoc, doc } from "firebase/firestore"
+import type { SchemaTemplate, SchemaInstance } from "@/types/excel"
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -48,6 +49,49 @@ export async function saveTemplate(name: string, mappings: any): Promise<{ id: s
     return { id: ref.id }
   } catch (err) {
     console.error('saveTemplate error', err)
+    throw err
+  }
+}
+
+/**
+ * Guarda un SchemaTemplate en la colección "schemaTemplates" usando schemaId como id del documento
+ */
+export async function saveSchemaTemplate(template: SchemaTemplate): Promise<void> {
+  try {
+    const docRef = doc(db, 'schemaTemplates', template.schemaId)
+    await setDoc(docRef, {
+      name: template.name,
+      type: template.type,
+      version: template.version,
+      isSystem: true,
+      schemaId: template.schemaId,
+      description: template.description,
+      headerFields: template.headerFields,
+      table: template.table,
+    }, { merge: true })
+  } catch (err) {
+    console.error('saveSchemaTemplate error', err)
+    throw err
+  }
+}
+
+/**
+ * Guarda una instancia de mapeo en la colección "mappings"
+ */
+export async function saveMapping(mapping: SchemaInstance & { name: string }): Promise<{ id: string }> {
+  try {
+    const col = collection(db, 'mappings')
+    const ref = await addDoc(col, {
+      name: mapping.name,
+      schemaId: mapping.schemaId,
+      schemaVersion: mapping.schemaVersion,
+      headerMappings: mapping.headerMappings,
+      tableMappings: mapping.tableMappings,
+      createdAt: mapping.createdAt,
+    })
+    return { id: ref.id }
+  } catch (err) {
+    console.error('saveMapping error', err)
     throw err
   }
 }

@@ -1,11 +1,12 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import * as XLSX from "xlsx"
 import { FileUploadZone } from "@/components/file-upload-zone"
 import { ExcelViewerFidel } from "@/components/excel-viewer-fidel"
 import { FloatingMappingPanel } from "@/components/flotante-mapping-panel"
 import { Header } from "@/components/header"
+import { saveSchemaTemplate } from "@/lib/firebase"
 import type { CellMapping, ExcelData, SchemaTemplate, SchemaInstance, SchemaFieldMapping } from "@/types/excel"
 
 // Schema Template de Auditoría
@@ -120,6 +121,13 @@ export default function Home() {
   const [currentHeaderFieldIndex, setCurrentHeaderFieldIndex] = useState(0)
   const [currentTableFieldIndex, setCurrentTableFieldIndex] = useState(0)
   const [draftCellOrColumn, setDraftCellOrColumn] = useState<string | null>(null)
+
+  // Guardar el SchemaTemplate en Firestore al montar el componente
+  useEffect(() => {
+    saveSchemaTemplate(AUDIT_SCHEMA_TEMPLATE).catch((err) => {
+      console.error("Error al guardar SchemaTemplate:", err)
+    })
+  }, [])
 
   const handleFileUpload = async (file: File) => {
     setIsLoading(true)
@@ -402,6 +410,14 @@ export default function Home() {
     ])
   }
 
+  const handleRemoveLastHeaderMapping = () => {
+    setHeaderMappings(prev => prev.slice(0, -1))
+  }
+
+  const handleRemoveLastTableMapping = () => {
+    setTableMappings(prev => prev.slice(0, -1))
+  }
+
   const handleCreateMapping = (mapping: Omit<CellMapping, "id" | "createdAt">) => {
     // Mantener para compatibilidad, pero ya no se usa con schema templates
     setMappings(prev => [
@@ -500,6 +516,8 @@ export default function Home() {
               setDraftCellOrColumn={setDraftCellOrColumn}
               onHeaderFieldMapped={handleHeaderFieldMapped}
               onTableFieldMapped={handleTableFieldMapped}
+              onRemoveLastHeaderMapping={handleRemoveLastHeaderMapping}
+              onRemoveLastTableMapping={handleRemoveLastTableMapping}
             />
           </>
         )}

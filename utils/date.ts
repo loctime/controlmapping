@@ -132,3 +132,4 @@ export function isSameDay(date1: Date | null, date2: Date | null): boolean {
   return compareDates(date1, date2) === 0
 }
 
+

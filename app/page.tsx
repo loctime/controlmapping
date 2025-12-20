@@ -55,6 +55,34 @@ const AUDIT_SCHEMA_TEMPLATE: SchemaTemplate = {
       dataType: "number"
     },
     {
+      role: "cantidad_cumple",
+      label: "Cantidad Cumple",
+      required: false,
+      dataType: "number",
+      description: "Cantidad total de ítems que cumplen (valor final desde Excel)"
+    },
+    {
+      role: "cantidad_cumple_parcial",
+      label: "Cantidad Cumple Parcial",
+      required: false,
+      dataType: "number",
+      description: "Cantidad total de ítems que cumplen parcialmente (valor final desde Excel)"
+    },
+    {
+      role: "cantidad_no_cumple",
+      label: "Cantidad No Cumple",
+      required: false,
+      dataType: "number",
+      description: "Cantidad total de ítems que no cumplen (valor final desde Excel)"
+    },
+    {
+      role: "cantidad_no_aplica",
+      label: "Cantidad No Aplica",
+      required: false,
+      dataType: "number",
+      description: "Cantidad total de ítems que no aplican (valor final desde Excel)"
+    },
+    {
       role: "cumplimiento_total_pct",
       label: "% de cumplimiento total",
       required: true,

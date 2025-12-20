@@ -333,6 +333,19 @@ export function parseAudit(
   // ========================================================================
   const headers: Record<string, string | number | Date | null> = {}
   
+  // Inicializar campos de breakdown con null (asegurar que siempre estén presentes)
+  const breakdownFields = [
+    "cantidad_cumple",
+    "cantidad_cumple_parcial", 
+    "cantidad_no_cumple",
+    "cantidad_no_aplica"
+  ]
+  
+  breakdownFields.forEach((role) => {
+    headers[role] = null
+  })
+  
+  // Procesar todos los mapeos de headers
   schemaInstance.headerMappings.forEach((mapping) => {
     const field = schemaTemplate.headerFields.find((f) => f.role === mapping.role)
     if (!field) return
@@ -428,41 +441,56 @@ export function parseAudit(
   // ========================================================================
   // 3. CALCULAR TOTALES
   // ========================================================================
-  // Primero intentar usar los totales del header si están disponibles
+  // Priorizar valores desde headers (valores finales del Excel)
+  // Solo calcular desde items si los headers no están disponibles
   let totals: AuditTotals
   
   const cantidadItems = headers["cantidad_items"]
+  const cantidadCumple = headers["cantidad_cumple"]
+  const cantidadCumpleParcial = headers["cantidad_cumple_parcial"]
+  const cantidadNoCumple = headers["cantidad_no_cumple"]
+  const cantidadNoAplica = headers["cantidad_no_aplica"]
   const porcentajeCumplimiento = headers["cumplimiento_total_pct"] ?? headers["porcentaje_cumplimiento"]
   
-  // Si tenemos totales en el header y coinciden con los items, intentar usarlos
+  // Calcular totales desde items como fallback
+  const calculatedTotals = calculateTotals(items)
+  
+  // Si tenemos valores desde headers, usarlos (solo valores finales del Excel)
   if (
     typeof cantidadItems === "number" &&
-    cantidadItems === items.length &&
-    typeof porcentajeCumplimiento === "number"
+    typeof cantidadCumple === "number" &&
+    typeof cantidadCumpleParcial === "number" &&
+    typeof cantidadNoCumple === "number" &&
+    typeof cantidadNoAplica === "number"
   ) {
-    // Calcular cumple_parcial desde items (no está en header)
-    const calculatedTotals = calculateTotals(items)
-    
+    // Usar valores completos desde headers
     totals = {
       totalItems: cantidadItems,
-      cumple: (headers["cantidad_cumple"] as number) ?? calculatedTotals.cumple,
-      cumple_parcial: calculatedTotals.cumple_parcial, // Siempre desde items
-      no_cumple: (headers["cantidad_no_cumple"] as number) ?? calculatedTotals.no_cumple,
-      no_aplica: (headers["cantidad_no_aplica"] as number) ?? calculatedTotals.no_aplica,
+      cumple: cantidadCumple,
+      cumple_parcial: cantidadCumpleParcial,
+      no_cumple: cantidadNoCumple,
+      no_aplica: cantidadNoAplica,
       porcentajeCumplimiento:
         typeof porcentajeCumplimiento === "number"
           ? porcentajeCumplimiento
           : calculatedTotals.porcentajeCumplimiento,
     }
-    
-    // Si los totales del header no son coherentes, recalcular todo desde items
-    const headerSum = totals.cumple + totals.no_cumple + totals.no_aplica
-    if (headerSum !== cantidadItems - totals.cumple_parcial) {
-      totals = calculatedTotals
+  } else if (
+    typeof cantidadItems === "number" &&
+    typeof porcentajeCumplimiento === "number"
+  ) {
+    // Si solo tenemos cantidad_items y porcentaje, usar valores parciales del header con fallback a items
+    totals = {
+      totalItems: cantidadItems,
+      cumple: typeof cantidadCumple === "number" ? cantidadCumple : calculatedTotals.cumple,
+      cumple_parcial: typeof cantidadCumpleParcial === "number" ? cantidadCumpleParcial : calculatedTotals.cumple_parcial,
+      no_cumple: typeof cantidadNoCumple === "number" ? cantidadNoCumple : calculatedTotals.no_cumple,
+      no_aplica: typeof cantidadNoAplica === "number" ? cantidadNoAplica : calculatedTotals.no_aplica,
+      porcentajeCumplimiento: porcentajeCumplimiento,
     }
   } else {
-    // Calcular totales automáticamente desde los items
-    totals = calculateTotals(items)
+    // Si no hay headers disponibles, calcular desde items (fallback)
+    totals = calculatedTotals
   }
   
   // ========================================================================

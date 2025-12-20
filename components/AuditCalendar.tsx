@@ -1,11 +1,13 @@
 "use client"
 
 import { useState, useMemo } from "react"
-import { ChevronLeft, ChevronRight } from "lucide-react"
+import { ChevronLeft, ChevronRight, Info } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 import type { AuditFile } from "@/parsers/auditParser"
 import {
@@ -264,6 +266,39 @@ export function AuditCalendar({ auditFiles }: AuditCalendarProps) {
   const [selectedAudit, setSelectedAudit] = useState<AuditFile | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
 
+  // Detectar disponibilidad de datos desde headers
+  const dataAvailability = useMemo(() => {
+    if (auditFiles.length === 0) {
+      return {
+        hasCumplimientoPct: false,
+        hasFechas: false,
+        hasOperaciones: false,
+      }
+    }
+
+    let hasCumplimientoPct = false
+    let hasFechas = false
+    let hasOperaciones = false
+
+    auditFiles.forEach((file) => {
+      if (getCumplimientoPct(file.headers) !== null) {
+        hasCumplimientoPct = true
+      }
+      if (normalizeDate(file.headers.fecha)) {
+        hasFechas = true
+      }
+      if (file.headers.operacion) {
+        hasOperaciones = true
+      }
+    })
+
+    return {
+      hasCumplimientoPct,
+      hasFechas,
+      hasOperaciones,
+    }
+  }, [auditFiles])
+
   // Agrupar auditorías por operación y mes
   const dataByOperacionAndMonth = useMemo(() => {
     const grouped = new Map<string, Map<number, AuditFile[]>>()
@@ -332,11 +367,48 @@ export function AuditCalendar({ auditFiles }: AuditCalendarProps) {
     return operacionMap.get(monthIndex) || []
   }
 
+  // Contar celdas con datos válidos
+  const celdasConDatos = useMemo(() => {
+    let count = 0
+    operaciones.forEach((operacion) => {
+      const operacionMap = dataByOperacionAndMonth.get(operacion)
+      if (!operacionMap) return
+      
+      MONTHS.forEach((_, monthIndex) => {
+        const audits = operacionMap.get(monthIndex)
+        if (audits && audits.length > 0) {
+          const audit = audits[0]
+          if (getCumplimientoPct(audit.headers) !== null) {
+            count++
+          }
+        }
+      })
+    })
+    return count
+  }, [operaciones, dataByOperacionAndMonth])
+
   return (
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
-          <CardTitle>Calendario de Auditorías - Operación/Mes</CardTitle>
+          <div className="flex items-center gap-2">
+            <CardTitle>Calendario de Auditorías - Operación/Mes</CardTitle>
+            {(!dataAvailability.hasCumplimientoPct || !dataAvailability.hasFechas || !dataAvailability.hasOperaciones) && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Info className="h-4 w-4 text-muted-foreground" />
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Este calendario requiere:</p>
+                  <ul className="list-disc ml-4 mt-1">
+                    <li>Porcentaje de cumplimiento en headers</li>
+                    <li>Fechas válidas en headers</li>
+                    <li>Campo "operacion" en headers</li>
+                  </ul>
+                </TooltipContent>
+              </Tooltip>
+            )}
+          </div>
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
@@ -361,6 +433,26 @@ export function AuditCalendar({ auditFiles }: AuditCalendarProps) {
         </div>
       </CardHeader>
       <CardContent>
+        {/* Alerta informativa si faltan datos */}
+        {(!dataAvailability.hasCumplimientoPct || !dataAvailability.hasFechas || !dataAvailability.hasOperaciones) && (
+          <Alert variant="default" className="mb-4 border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30">
+            <Info className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+            <AlertDescription className="text-blue-900 dark:text-blue-100">
+              <strong>Datos faltantes:</strong>
+              <ul className="mt-2 ml-4 list-disc space-y-1 text-sm">
+                {!dataAvailability.hasCumplimientoPct && (
+                  <li>No se encontró porcentaje de cumplimiento. Las celdas se mostrarán vacías.</li>
+                )}
+                {!dataAvailability.hasFechas && (
+                  <li>No se encontraron fechas válidas. No se podrán agrupar por mes.</li>
+                )}
+                {!dataAvailability.hasOperaciones && (
+                  <li>No se encontró campo "operacion". Se usará el nombre del archivo como identificador.</li>
+                )}
+              </ul>
+            </AlertDescription>
+          </Alert>
+        )}
         <div className="w-full overflow-x-auto">
           <div className="inline-block min-w-full">
             <table className="w-full border-collapse">
@@ -460,25 +552,38 @@ export function AuditCalendar({ auditFiles }: AuditCalendarProps) {
           </div>
         </div>
 
-        {/* Leyenda */}
-        <div className="mt-6 pt-4 border-t">
-          <p className="text-xs font-medium mb-2">Leyenda de colores:</p>
-          <div className="flex flex-wrap gap-3 text-xs">
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-700" />
-              <span>≥ 90%</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700" />
-              <span>70% - 89%</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded bg-orange-100 dark:bg-orange-900/30 border border-orange-300 dark:border-orange-700" />
-              <span>50% - 69%</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700" />
-              <span>&lt; 50%</span>
+        {/* Información y Leyenda */}
+        <div className="mt-6 pt-4 border-t space-y-3">
+          {celdasConDatos === 0 && (
+            <Alert variant="default" className="border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30">
+              <Info className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+              <AlertDescription className="text-amber-900 dark:text-amber-100">
+                <p className="text-sm">
+                  No se encontraron datos válidos para mostrar en el calendario. 
+                  Verificá que los archivos Excel incluyan porcentaje de cumplimiento y fechas en los headers.
+                </p>
+              </AlertDescription>
+            </Alert>
+          )}
+          <div>
+            <p className="text-xs font-medium mb-2">Leyenda de colores:</p>
+            <div className="flex flex-wrap gap-3 text-xs">
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-700" />
+                <span>≥ 90%</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700" />
+                <span>70% - 89%</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded bg-orange-100 dark:bg-orange-900/30 border border-orange-300 dark:border-orange-700" />
+                <span>50% - 69%</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700" />
+                <span>&lt; 50%</span>
+              </div>
             </div>
           </div>
         </div>

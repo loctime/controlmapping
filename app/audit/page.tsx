@@ -4,7 +4,7 @@ import { useState } from "react"
 import * as XLSX from "xlsx"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { MappingSelector } from "@/components/mapping-selector"
+import { AuditHeader } from "@/components/audit-header"
 import { MultiFileUpload } from "@/components/multi-file-upload"
 import { AuditDashboard } from "@/components/audit-dashboard"
 import { AuditCalendar } from "@/components/AuditCalendar"
@@ -138,25 +138,23 @@ export default function AuditPage() {
   const canProcess = selectedMapping !== null && schemaTemplate !== null && files.length > 0 && !isProcessing
 
   return (
-    <div className="container mx-auto py-8 px-4 max-w-7xl">
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground mb-2">Dashboard de Auditorías</h1>
-          <p className="text-muted-foreground">
-            Procesá múltiples archivos Excel de auditorías y generá un reporte consolidado
-          </p>
-        </div>
+    <div className="min-h-screen flex flex-col">
+      <AuditHeader selectedMappingId={selectedMapping?.id || null} onMappingSelect={handleMappingSelect} />
+      <div className="container mx-auto py-8 px-4 max-w-7xl flex-1">
+        <div className="space-y-6">
+          <div>
+            <p className="text-muted-foreground">
+              Procesá múltiples archivos Excel de auditorías y generá un reporte consolidado
+            </p>
+          </div>
 
-        {error && (
-          <Card className="p-4 border-destructive bg-destructive/10">
-            <p className="text-sm text-destructive">{error}</p>
-          </Card>
-        )}
+          {error && (
+            <Card className="p-4 border-destructive bg-destructive/10">
+              <p className="text-sm text-destructive">{error}</p>
+            </Card>
+          )}
 
-        <div className="grid gap-6 md:grid-cols-2">
-          <MappingSelector selectedMappingId={selectedMapping?.id || null} onMappingSelect={handleMappingSelect} />
           <MultiFileUpload files={files} onFilesChange={setFiles} />
-        </div>
 
         <Card className="p-4">
           <div className="flex items-center justify-between">
@@ -186,6 +184,7 @@ export default function AuditPage() {
             <AuditDashboard auditFiles={auditResults} />
           </>
         )}
+        </div>
       </div>
     </div>
   )

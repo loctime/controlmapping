@@ -113,11 +113,11 @@ export function MultiFileUpload({ files, onFilesChange }: MultiFileUploadProps) 
             <p className="text-sm font-medium text-foreground">
               Archivos seleccionados ({files.length})
             </p>
-            <div className="space-y-1 max-h-48 overflow-y-auto">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 max-h-48 overflow-y-auto">
               {files.map((file, index) => (
                 <div
                   key={`${file.name}-${index}`}
-                  className="flex items-center justify-between p-2 bg-muted rounded-md"
+                  className="flex items-center justify-between p-2 bg-muted rounded-md gap-2"
                 >
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-foreground truncate">{file.name}</p>
@@ -128,7 +128,7 @@ export function MultiFileUpload({ files, onFilesChange }: MultiFileUploadProps) 
                     variant="ghost"
                     size="sm"
                     onClick={() => removeFile(index)}
-                    className="ml-2 h-8 w-8 p-0"
+                    className="h-8 w-8 p-0 shrink-0"
                   >
                     <X className="h-4 w-4" />
                   </Button>

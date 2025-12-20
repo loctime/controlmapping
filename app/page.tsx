@@ -67,32 +67,26 @@ const AUDIT_SCHEMA_TEMPLATE: SchemaTemplate = {
       dataType: "number"
     },
     {
-      role: "cantidad_aplica",
-      label: "Cantidad aplica",
+      role: "porcentaje_cumple",
+      label: "% Cumple",
       required: false,
-      dataType: "number"
+      dataType: "percentage"
     },
     {
-      role: "cantidad_no_aplica",
-      label: "Cantidad no aplica",
+      role: "porcentaje_cumple_parcial",
+      label: "% Cumple Parcial",
       required: false,
-      dataType: "number"
+      dataType: "percentage"
     },
     {
-      role: "cantidad_cumple",
-      label: "Cantidad cumple",
+      role: "porcentaje_no_cumple",
+      label: "% No cumple",
       required: false,
-      dataType: "number"
+      dataType: "percentage"
     },
     {
-      role: "cantidad_no_cumple",
-      label: "Cantidad no cumple",
-      required: false,
-      dataType: "number"
-    },
-    {
-      role: "porcentaje_cumplimiento",
-      label: "Porcentaje de cumplimiento",
+      role: "porcentaje_no_aplica",
+      label: "% No aplica",
       required: false,
       dataType: "percentage"
     }

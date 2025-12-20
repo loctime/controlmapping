@@ -2,11 +2,15 @@
 
 import { useState, useEffect } from "react"
 import * as XLSX from "xlsx"
+import { Button } from "@/components/ui/button"
 import { FileUploadZone } from "@/components/file-upload-zone"
 import { ExcelViewerFidel } from "@/components/excel-viewer-fidel"
 import { FloatingMappingPanel } from "@/components/flotante-mapping-panel"
 import { Header } from "@/components/header"
+import { MultiFileUpload } from "@/components/multi-file-upload"
+import { ResultTable } from "@/components/result-table"
 import { saveSchemaTemplate } from "@/lib/firebase"
+import { parseAudit, type AuditFile } from "@/parsers/auditParser"
 import type { CellMapping, ExcelData, SchemaTemplate, SchemaInstance, SchemaFieldMapping } from "@/types/excel"
 
 // Schema Template de Auditoría
@@ -151,6 +155,12 @@ export default function Home() {
   const [currentHeaderFieldIndex, setCurrentHeaderFieldIndex] = useState(0)
   const [currentTableFieldIndex, setCurrentTableFieldIndex] = useState(0)
   const [draftCellOrColumn, setDraftCellOrColumn] = useState<string | null>(null)
+  
+  // Estados para procesamiento de auditorías
+  const [auditFiles, setAuditFiles] = useState<File[]>([])
+  const [auditResults, setAuditResults] = useState<AuditFile[]>([])
+  const [isProcessingAudits, setIsProcessingAudits] = useState(false)
+  const [showAuditResults, setShowAuditResults] = useState(false)
 
   // Guardar el SchemaTemplate en Firestore al montar el componente
   useEffect(() => {
@@ -485,6 +495,128 @@ export default function Home() {
     a.click()
   }
 
+  // Función para leer un archivo Excel y convertirlo a ExcelData (versión simplificada sin estilos)
+  const readExcelFile = async (file: File): Promise<ExcelData> => {
+    const arrayBuffer = await file.arrayBuffer()
+    const workbook = XLSX.read(arrayBuffer, {
+      type: "array",
+      cellStyles: false,
+      cellHTML: false,
+    })
+
+    const firstSheetName = workbook.SheetNames[0]
+    const worksheet = workbook.Sheets[firstSheetName]
+    const range = XLSX.utils.decode_range(worksheet["!ref"] || "A1")
+
+    const cells: Record<string, { value: string | number }> = {}
+
+    for (let R = range.s.r; R <= range.e.r; R++) {
+      for (let C = range.s.c; C <= range.e.c; C++) {
+        const cellAddress = XLSX.utils.encode_cell({ r: R, c: C })
+        const cell = worksheet[cellAddress]
+
+        if (cell) {
+          let cellValue: string | number = ""
+          if (cell.v !== undefined && cell.v !== null) {
+            if (cell.t === "n") {
+              cellValue = cell.v as number
+            } else if (cell.t === "b") {
+              cellValue = cell.v ? "TRUE" : "FALSE"
+            } else {
+              cellValue = String(cell.v)
+            }
+          }
+
+          cells[cellAddress] = {
+            value: cellValue,
+          }
+        }
+      }
+    }
+
+    return {
+      fileName: file.name,
+      sheets: [
+        {
+          name: firstSheetName,
+          rows: range.e.r + 1,
+          cols: range.e.c + 1,
+          cells,
+        },
+      ],
+    }
+  }
+
+  // Función para procesar auditorías usando el parser
+  const handleProcessAudits = async () => {
+    if (auditFiles.length === 0) {
+      alert("Por favor seleccioná al menos un archivo Excel para procesar")
+      return
+    }
+
+    if (headerMappings.length === 0 && tableMappings.length === 0) {
+      alert("Por favor completá el mapeo antes de procesar auditorías")
+      return
+    }
+
+    setIsProcessingAudits(true)
+    setAuditResults([])
+    setShowAuditResults(false)
+
+    try {
+      // Construir el SchemaInstance actual
+      const schemaInstance: SchemaInstance = {
+        schemaId: schemaTemplate.schemaId,
+        schemaVersion: schemaTemplate.version,
+        fileName: "", // No importa para procesamiento
+        headerMappings: [...headerMappings],
+        tableMappings: [...tableMappings],
+        createdAt: new Date(),
+      }
+
+      const results: AuditFile[] = []
+      const errors: string[] = []
+
+      // Procesar cada archivo
+      for (let i = 0; i < auditFiles.length; i++) {
+        const file = auditFiles[i]
+        try {
+          console.log(`Procesando archivo ${i + 1}/${auditFiles.length}: ${file.name}`)
+          
+          // Leer el archivo Excel
+          const excelData = await readExcelFile(file)
+          
+          // Parsear usando el parser
+          const auditFile = parseAudit(excelData, schemaTemplate, schemaInstance)
+          
+          results.push(auditFile)
+          console.log(`✅ Archivo procesado: ${file.name}`)
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : "Error desconocido"
+          console.error(`❌ Error al procesar ${file.name}:`, errorMessage)
+          errors.push(`${file.name}: ${errorMessage}`)
+          // Continuar con el siguiente archivo sin romper el proceso
+        }
+      }
+
+      if (results.length > 0) {
+        setAuditResults(results)
+        setShowAuditResults(true)
+        
+        if (errors.length > 0) {
+          alert(`Se procesaron ${results.length} archivo(s) correctamente.\n\nErrores:\n${errors.join("\n")}`)
+        }
+      } else {
+        alert(`No se pudo procesar ningún archivo.\n\nErrores:\n${errors.join("\n")}`)
+      }
+    } catch (error) {
+      console.error("Error al procesar auditorías:", error)
+      alert(`Error al procesar auditorías: ${error instanceof Error ? error.message : "Error desconocido"}`)
+    } finally {
+      setIsProcessingAudits(false)
+    }
+  }
+
   return (
     <div className="h-screen flex flex-col bg-background">
       <Header
@@ -501,6 +633,9 @@ export default function Home() {
           setCurrentHeaderFieldIndex(0)
           setCurrentTableFieldIndex(0)
           setDraftCellOrColumn(null)
+          setAuditFiles([])
+          setAuditResults([])
+          setShowAuditResults(false)
         }}
         onToggleMappingPanel={() => setIsMappingPanelOpen(!isMappingPanelOpen)}
         isMappingPanelOpen={isMappingPanelOpen}
@@ -512,43 +647,100 @@ export default function Home() {
         }}
       />
 
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden">
         {!excelData ? (
           <div className="flex-1 flex items-center justify-center p-8">
             <FileUploadZone onFileSelect={handleFileUpload} isLoading={isLoading} />
           </div>
         ) : (
           <>
-            {/* Excel Viewer - Ocupa todo el espacio disponible */}
-            <div className="flex-1 overflow-hidden min-h-0 relative">
-              <ExcelViewerFidel
-                data={excelData}
-                mappings={mappings}
-                selectedCell={selectedCell}
-                onCellSelect={handleCellSelect}
-                zoom={zoom}
-                onZoomChange={setZoom}
-              />
-            </div>
-            
-            {/* Panel flotante de mapeo */}
-            <FloatingMappingPanel
-              excelData={excelData}
-              selectedCell={selectedCell}
-              schemaTemplate={schemaTemplate}
-              headerMappings={headerMappings}
-              tableMappings={tableMappings}
-              currentHeaderFieldIndex={currentHeaderFieldIndex}
-              setCurrentHeaderFieldIndex={setCurrentHeaderFieldIndex}
-              currentTableFieldIndex={currentTableFieldIndex}
-              setCurrentTableFieldIndex={setCurrentTableFieldIndex}
-              draftCellOrColumn={draftCellOrColumn}
-              setDraftCellOrColumn={setDraftCellOrColumn}
-              onHeaderFieldMapped={handleHeaderFieldMapped}
-              onTableFieldMapped={handleTableFieldMapped}
-              onRemoveLastHeaderMapping={handleRemoveLastHeaderMapping}
-              onRemoveLastTableMapping={handleRemoveLastTableMapping}
-            />
+            {showAuditResults ? (
+              /* Vista de resultados consolidados */
+              <div className="flex-1 overflow-auto p-4">
+                <ResultTable auditResults={auditResults} />
+                <div className="mt-4 flex justify-end">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setShowAuditResults(false)
+                      setAuditResults([])
+                    }}
+                  >
+                    Volver al mapeo
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <>
+                {/* Excel Viewer - Ocupa todo el espacio disponible */}
+                <div className="flex-1 overflow-hidden min-h-0 relative">
+                  <ExcelViewerFidel
+                    data={excelData}
+                    mappings={mappings}
+                    selectedCell={selectedCell}
+                    onCellSelect={handleCellSelect}
+                    zoom={zoom}
+                    onZoomChange={setZoom}
+                  />
+                </div>
+                
+                {/* Panel flotante de mapeo */}
+                <FloatingMappingPanel
+                  excelData={excelData}
+                  selectedCell={selectedCell}
+                  schemaTemplate={schemaTemplate}
+                  headerMappings={headerMappings}
+                  tableMappings={tableMappings}
+                  currentHeaderFieldIndex={currentHeaderFieldIndex}
+                  setCurrentHeaderFieldIndex={setCurrentHeaderFieldIndex}
+                  currentTableFieldIndex={currentTableFieldIndex}
+                  setCurrentTableFieldIndex={setCurrentTableFieldIndex}
+                  draftCellOrColumn={draftCellOrColumn}
+                  setDraftCellOrColumn={setDraftCellOrColumn}
+                  onHeaderFieldMapped={handleHeaderFieldMapped}
+                  onTableFieldMapped={handleTableFieldMapped}
+                  onRemoveLastHeaderMapping={handleRemoveLastHeaderMapping}
+                  onRemoveLastTableMapping={handleRemoveLastTableMapping}
+                />
+                
+                {/* Panel de procesamiento de auditorías */}
+                <div className="border-t border-border bg-card p-4">
+                  <div className="max-w-4xl mx-auto space-y-4">
+                    <div>
+                      <h3 className="text-lg font-semibold text-foreground mb-2">
+                        Procesar auditorías
+                      </h3>
+                      <p className="text-sm text-muted-foreground mb-4">
+                        Subí uno o varios archivos Excel con el mismo formato y procesalos usando el mapeo actual
+                      </p>
+                    </div>
+                    
+                    <MultiFileUpload files={auditFiles} onFilesChange={setAuditFiles} />
+                    
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm text-muted-foreground">
+                        {auditFiles.length > 0 && (
+                          <span>
+                            {auditFiles.length} archivo{auditFiles.length !== 1 ? "s" : ""} seleccionado{auditFiles.length !== 1 ? "s" : ""}
+                            {headerMappings.length + tableMappings.length > 0 && (
+                              <span className="ml-2">
+                                • {headerMappings.length + tableMappings.length} campo{headerMappings.length + tableMappings.length !== 1 ? "s" : ""} mapeado{headerMappings.length + tableMappings.length !== 1 ? "s" : ""}
+                              </span>
+                            )}
+                          </span>
+                        )}
+                      </div>
+                      <Button
+                        onClick={handleProcessAudits}
+                        disabled={auditFiles.length === 0 || isProcessingAudits || (headerMappings.length === 0 && tableMappings.length === 0)}
+                      >
+                        {isProcessingAudits ? "Procesando..." : "Procesar auditorías"}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
           </>
         )}
       </div>

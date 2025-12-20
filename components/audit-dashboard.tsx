@@ -337,6 +337,101 @@ export function AuditDashboard({ auditFiles }: AuditDashboardProps) {
     return ranking
   }, [auditFiles])
 
+  // Ranking inverso de operaciones (Top 10 con MENOR % cumplimiento)
+  const rankingInversoOperaciones = useMemo(() => {
+    const operacionesMap = new Map<string, { cumplimiento: number; count: number }>()
+
+    auditFiles.forEach((file) => {
+      const operacion = file.headers.operacion
+      if (!operacion) return
+
+      const cumplimiento = getCumplimientoPct(file.headers)
+      if (cumplimiento === null) return
+
+      if (!operacionesMap.has(String(operacion))) {
+        operacionesMap.set(String(operacion), { cumplimiento: 0, count: 0 })
+      }
+
+      const opData = operacionesMap.get(String(operacion))!
+      opData.cumplimiento += cumplimiento
+      opData.count++
+    })
+
+    const ranking = Array.from(operacionesMap.entries())
+      .map(([operacion, data]) => ({
+        operacion: String(operacion).substring(0, 30),
+        cumplimiento:
+          data.count > 0 ? Math.round((data.cumplimiento / data.count) * 100) / 100 : 0,
+      }))
+      .sort((a, b) => a.cumplimiento - b.cumplimiento) // Orden inverso: menor a mayor
+      .slice(0, 10)
+
+    return ranking
+  }, [auditFiles])
+
+  // Indicador de calidad de datos
+  const calidadDatos = useMemo(() => {
+    let conBreakdownCompleto = 0
+    let soloPorcentaje = 0
+    let sinMetricas = 0
+
+    auditFiles.forEach((file) => {
+      const cumple = getHeaderNumber(file.headers, "cantidad_cumple")
+      const cumpleParcial = getHeaderNumber(file.headers, "cantidad_cumple_parcial")
+      const noCumple = getHeaderNumber(file.headers, "cantidad_no_cumple")
+      const noAplica = getHeaderNumber(file.headers, "cantidad_no_aplica")
+      const cumplimientoPct = getCumplimientoPct(file.headers)
+
+      const tieneBreakdownCompleto =
+        cumple !== null &&
+        cumpleParcial !== null &&
+        noCumple !== null &&
+        noAplica !== null
+
+      if (tieneBreakdownCompleto) {
+        conBreakdownCompleto++
+      } else if (cumplimientoPct !== null) {
+        soloPorcentaje++
+      } else {
+        sinMetricas++
+      }
+    })
+
+    const total = auditFiles.length
+    return {
+      conBreakdownCompleto,
+      soloPorcentaje,
+      sinMetricas,
+      total,
+      pctBreakdownCompleto: total > 0 ? Math.round((conBreakdownCompleto / total) * 100) : 0,
+      pctSoloPorcentaje: total > 0 ? Math.round((soloPorcentaje / total) * 100) : 0,
+      pctSinMetricas: total > 0 ? Math.round((sinMetricas / total) * 100) : 0,
+    }
+  }, [auditFiles])
+
+  // Alertas por umbral
+  const alertasUmbral = useMemo(() => {
+    let bajo70 = 0
+    let bajo50 = 0
+
+    auditFiles.forEach((file) => {
+      const cumplimiento = getCumplimientoPct(file.headers)
+      if (cumplimiento === null) return
+
+      if (cumplimiento < 50) {
+        bajo50++
+      } else if (cumplimiento < 70) {
+        bajo70++
+      }
+    })
+
+    return {
+      bajo70,
+      bajo50,
+      total: bajo70 + bajo50,
+    }
+  }, [auditFiles])
+
   const chartConfig = {
     cumplimiento: {
       label: "% Cumplimiento",
@@ -466,6 +561,143 @@ export function AuditDashboard({ auditFiles }: AuditDashboardProps) {
               </p>
             </div>
             <AlertTriangle className="h-8 w-8 text-muted-foreground" />
+          </div>
+        </Card>
+      </div>
+
+      {/* Estadísticas Ejecutivas */}
+      <div className="grid gap-6 md:grid-cols-2">
+        {/* Indicador de Calidad de Datos */}
+        <Card className="p-6">
+          <div className="space-y-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <Label className="text-lg font-semibold">Calidad de Datos</Label>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Info className="h-3 w-3 text-muted-foreground" />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Usa headers para clasificar auditorías:</p>
+                    <ul className="list-disc ml-4 mt-1 text-xs">
+                      <li>Breakdown completo: cantidad_cumple, cantidad_cumple_parcial, cantidad_no_cumple, cantidad_no_aplica</li>
+                      <li>Solo porcentaje: cumplimiento_total_pct o porcentaje_cumplimiento</li>
+                      <li>Sin métricas: ninguno de los anteriores</li>
+                    </ul>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Clasificación de auditorías según métricas disponibles
+              </p>
+            </div>
+            {calidadDatos.total > 0 ? (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-950/20 rounded-lg border border-green-200 dark:border-green-800">
+                  <div>
+                    <p className="text-sm font-medium text-green-900 dark:text-green-100">Con Breakdown Completo</p>
+                    <p className="text-xs text-green-700 dark:text-green-300">Todos los campos de cantidad mapeados</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-2xl font-bold text-green-700 dark:text-green-300">{calidadDatos.conBreakdownCompleto}</p>
+                    <p className="text-xs text-green-600 dark:text-green-400">{calidadDatos.pctBreakdownCompleto}%</p>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between p-3 bg-yellow-50 dark:bg-yellow-950/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                  <div>
+                    <p className="text-sm font-medium text-yellow-900 dark:text-yellow-100">Solo Porcentaje</p>
+                    <p className="text-xs text-yellow-700 dark:text-yellow-300">Sin breakdown de cantidades</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-2xl font-bold text-yellow-700 dark:text-yellow-300">{calidadDatos.soloPorcentaje}</p>
+                    <p className="text-xs text-yellow-600 dark:text-yellow-400">{calidadDatos.pctSoloPorcentaje}%</p>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-950/20 rounded-lg border border-gray-200 dark:border-gray-800">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Sin Métricas Finales</p>
+                    <p className="text-xs text-gray-700 dark:text-gray-300">Sin porcentaje ni breakdown</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-2xl font-bold text-gray-700 dark:text-gray-300">{calidadDatos.sinMetricas}</p>
+                    <p className="text-xs text-gray-600 dark:text-gray-400">{calidadDatos.pctSinMetricas}%</p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <p className="text-sm text-muted-foreground">No hay datos disponibles</p>
+              </div>
+            )}
+          </div>
+        </Card>
+
+        {/* Alertas por Umbral - Versión Expandida */}
+        <Card className="p-6 border-orange-200 dark:border-orange-800">
+          <div className="space-y-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <Label className="text-lg font-semibold">Alertas de Cumplimiento</Label>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Info className="h-3 w-3 text-muted-foreground" />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Usa: headers.cumplimiento_total_pct o headers.porcentaje_cumplimiento</p>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Auditorías que requieren atención por bajo cumplimiento
+              </p>
+            </div>
+            {dataAvailability.hasCumplimientoPct ? (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between p-4 bg-red-50 dark:bg-red-950/20 rounded-lg border border-red-200 dark:border-red-800">
+                  <div className="flex items-center gap-3">
+                    <AlertTriangle className="h-6 w-6 text-red-600 dark:text-red-400" />
+                    <div>
+                      <p className="text-sm font-medium text-red-900 dark:text-red-100">Cumplimiento &lt; 50%</p>
+                      <p className="text-xs text-red-700 dark:text-red-300">Crítico - Requiere acción inmediata</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-3xl font-bold text-red-700 dark:text-red-300">{alertasUmbral.bajo50}</p>
+                    <p className="text-xs text-red-600 dark:text-red-400">
+                      {auditFiles.length > 0 ? Math.round((alertasUmbral.bajo50 / auditFiles.length) * 100) : 0}% del total
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between p-4 bg-orange-50 dark:bg-orange-950/20 rounded-lg border border-orange-200 dark:border-orange-800">
+                  <div className="flex items-center gap-3">
+                    <AlertTriangle className="h-6 w-6 text-orange-600 dark:text-orange-400" />
+                    <div>
+                      <p className="text-sm font-medium text-orange-900 dark:text-orange-100">Cumplimiento &lt; 70%</p>
+                      <p className="text-xs text-orange-700 dark:text-orange-300">Atención - Requiere seguimiento</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-3xl font-bold text-orange-700 dark:text-orange-300">{alertasUmbral.bajo70}</p>
+                    <p className="text-xs text-orange-600 dark:text-orange-400">
+                      {auditFiles.length > 0 ? Math.round((alertasUmbral.bajo70 / auditFiles.length) * 100) : 0}% del total
+                    </p>
+                  </div>
+                </div>
+                {alertasUmbral.total === 0 && (
+                  <div className="text-center py-4">
+                    <CheckCircle2 className="h-8 w-8 text-green-500 mx-auto mb-2" />
+                    <p className="text-sm text-muted-foreground">Todas las auditorías tienen cumplimiento &ge; 70%</p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <p className="text-sm text-muted-foreground">No hay datos de cumplimiento disponibles</p>
+                <p className="text-xs text-muted-foreground/70 mt-1">
+                  Se requiere headers.cumplimiento_total_pct o headers.porcentaje_cumplimiento
+                </p>
+              </div>
+            )}
           </div>
         </Card>
       </div>
@@ -850,6 +1082,88 @@ export function AuditDashboard({ auditFiles }: AuditDashboardProps) {
             <div className="text-center py-8 space-y-2">
               <p className="text-sm text-muted-foreground">
                 No hay datos de ranking disponibles
+              </p>
+              {(!dataAvailability.hasCumplimientoPct || !dataAvailability.hasOperaciones) && (
+                <p className="text-xs text-muted-foreground/70">
+                  {!dataAvailability.hasCumplimientoPct && !dataAvailability.hasOperaciones
+                    ? "Faltan porcentajes de cumplimiento y operaciones en los headers."
+                    : !dataAvailability.hasCumplimientoPct
+                      ? "Faltan porcentajes de cumplimiento en los headers."
+                      : "Faltan operaciones en los headers."}
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      </Card>
+
+      {/* Ranking Inverso de Operaciones */}
+      <Card className="p-6 border-red-200 dark:border-red-800">
+        <div className="space-y-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <Label className="text-lg font-semibold">Operaciones que Requieren Atención</Label>
+              {(!dataAvailability.hasCumplimientoPct || !dataAvailability.hasOperaciones) && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Info className="h-3 w-3 text-muted-foreground" />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Usa:</p>
+                    <ul className="list-disc ml-4 mt-1">
+                      <li>headers.operacion</li>
+                      <li>headers.cumplimiento_total_pct o headers.porcentaje_cumplimiento</li>
+                    </ul>
+                  </TooltipContent>
+                </Tooltip>
+              )}
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Top 10 operaciones con menor % de cumplimiento promedio
+            </p>
+          </div>
+          {rankingInversoOperaciones.length > 0 ? (
+            <ChartContainer config={chartConfig} className="h-[400px]">
+              <BarChart data={rankingInversoOperaciones} layout="vertical">
+                <defs>
+                  <linearGradient id="barGradientInverse" x1="0" y1="0" x2="1" y2="0">
+                    <stop offset="0%" stopColor="#ef4444" stopOpacity={0.9} />
+                    <stop offset="50%" stopColor="#f97316" stopOpacity={0.9} />
+                    <stop offset="100%" stopColor="#eab308" stopOpacity={0.9} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis 
+                  type="number" 
+                  domain={[0, 100]} 
+                  stroke="#6b7280"
+                  tick={{ fill: "#6b7280", fontSize: 12 }}
+                />
+                <YAxis 
+                  dataKey="operacion" 
+                  type="category" 
+                  width={150}
+                  stroke="#6b7280"
+                  tick={{ fill: "#6b7280", fontSize: 11 }}
+                />
+                <ChartTooltip 
+                  content={<ChartTooltipContent />}
+                  cursor={{ fill: "rgba(239, 68, 68, 0.1)" }}
+                />
+                <Bar 
+                  dataKey="cumplimiento" 
+                  radius={[0, 8, 8, 0]}
+                >
+                  {rankingInversoOperaciones.map((entry, index) => (
+                    <Cell key={`cell-inverse-${index}`} fill={getCumplimientoColor(entry.cumplimiento)} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ChartContainer>
+          ) : (
+            <div className="text-center py-8 space-y-2">
+              <p className="text-sm text-muted-foreground">
+                No hay datos de ranking inverso disponibles
               </p>
               {(!dataAvailability.hasCumplimientoPct || !dataAvailability.hasOperaciones) && (
                 <p className="text-xs text-muted-foreground/70">

@@ -7,9 +7,52 @@ import { BarChart, Bar, PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, Cart
 import { Label } from "@/components/ui/label"
 import { TrendingUp, FileCheck, AlertTriangle, CheckCircle2 } from "lucide-react"
 import type { AuditFile } from "@/parsers/auditParser"
+import { normalizeDate } from "@/utils/date"
 
 interface AuditDashboardProps {
   auditFiles: AuditFile[]
+}
+
+/**
+ * Helpers para obtener métricas oficiales desde headers
+ * REGLA: Solo usar valores desde audit.headers (mapeados desde Excel)
+ */
+
+/**
+ * Obtiene el porcentaje de cumplimiento oficial desde headers
+ */
+function getCumplimientoPct(headers: AuditFile["headers"]): number | null {
+  const value =
+    headers.cumplimiento_total_pct ?? headers.porcentaje_cumplimiento ?? null
+
+  if (value === null || value === undefined) return null
+
+  if (typeof value === "number") return value
+  if (typeof value === "string") {
+    const num = parseFloat(value.replace(/%/g, "").replace(/,/g, ".").trim())
+    return isNaN(num) ? null : num
+  }
+
+  return null
+}
+
+/**
+ * Obtiene un valor numérico desde headers
+ */
+function getHeaderNumber(
+  headers: AuditFile["headers"],
+  key: string
+): number | null {
+  const value = headers[key]
+  if (value === null || value === undefined) return null
+
+  if (typeof value === "number") return value
+  if (typeof value === "string") {
+    const num = parseFloat(value.replace(/,/g, ".").trim())
+    return isNaN(num) ? null : num
+  }
+
+  return null
 }
 
 export function AuditDashboard({ auditFiles }: AuditDashboardProps) {
@@ -25,18 +68,26 @@ export function AuditDashboard({ auditFiles }: AuditDashboardProps) {
     }
 
     const totalAuditorias = auditFiles.length
-    const totalItems = auditFiles.reduce((sum, file) => sum + file.totals.totalItems, 0)
+    
+    // Solo usar valores oficiales desde headers
+    const totalItems = auditFiles.reduce((sum, file) => {
+      const items = getHeaderNumber(file.headers, "cantidad_items")
+      return sum + (items ?? 0)
+    }, 0)
     
     const cumplimientos = auditFiles
-      .map((file) => file.totals.porcentajeCumplimiento)
-      .filter((val) => val > 0)
+      .map((file) => getCumplimientoPct(file.headers))
+      .filter((val): val is number => val !== null && val > 0)
     
     const cumplimientoPromedio =
       cumplimientos.length > 0
         ? cumplimientos.reduce((sum, val) => sum + val, 0) / cumplimientos.length
         : 0
 
-    const totalIncumplimientos = auditFiles.reduce((sum, file) => sum + file.totals.no_cumple, 0)
+    const totalIncumplimientos = auditFiles.reduce((sum, file) => {
+      const noCumple = getHeaderNumber(file.headers, "cantidad_no_cumple")
+      return sum + (noCumple ?? 0)
+    }, 0)
 
     return {
       totalAuditorias,
@@ -56,10 +107,15 @@ export function AuditDashboard({ auditFiles }: AuditDashboardProps) {
     }
 
     auditFiles.forEach((file) => {
-      distribucion.cumple += file.totals.cumple
-      distribucion.cumple_parcial += file.totals.cumple_parcial
-      distribucion.no_cumple += file.totals.no_cumple
-      distribucion.no_aplica += file.totals.no_aplica
+      const cumple = getHeaderNumber(file.headers, "cantidad_cumple")
+      const cumpleParcial = getHeaderNumber(file.headers, "cantidad_cumple_parcial")
+      const noCumple = getHeaderNumber(file.headers, "cantidad_no_cumple")
+      const noAplica = getHeaderNumber(file.headers, "cantidad_no_aplica")
+      
+      if (cumple !== null) distribucion.cumple += cumple
+      if (cumpleParcial !== null) distribucion.cumple_parcial += cumpleParcial
+      if (noCumple !== null) distribucion.no_cumple += noCumple
+      if (noAplica !== null) distribucion.no_aplica += noAplica
     })
 
     return [
@@ -75,11 +131,12 @@ export function AuditDashboard({ auditFiles }: AuditDashboardProps) {
     const mesesMap = new Map<string, { cumplimientos: number[]; count: number }>()
 
     auditFiles.forEach((file) => {
-      const fecha = file.headers.fecha
-      if (!fecha || !(fecha instanceof Date)) return
+      const fecha = normalizeDate(file.headers.fecha)
+      if (!fecha) return
 
       const mesKey = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, "0")}`
-      const cumplimiento = file.totals.porcentajeCumplimiento
+      const cumplimiento = getCumplimientoPct(file.headers)
+      if (cumplimiento === null) return
 
       if (!mesesMap.has(mesKey)) {
         mesesMap.set(mesKey, { cumplimientos: [], count: 0 })
@@ -154,7 +211,8 @@ export function AuditDashboard({ auditFiles }: AuditDashboardProps) {
       const operacion = file.headers.operacion
       if (!operacion) return
 
-      const cumplimiento = file.totals.porcentajeCumplimiento
+      const cumplimiento = getCumplimientoPct(file.headers)
+      if (cumplimiento === null) return
 
       if (!operacionesMap.has(String(operacion))) {
         operacionesMap.set(String(operacion), { cumplimiento: 0, count: 0 })

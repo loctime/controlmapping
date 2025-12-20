@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card"
 import { MappingSelector } from "@/components/mapping-selector"
 import { MultiFileUpload } from "@/components/multi-file-upload"
 import { AuditDashboard } from "@/components/audit-dashboard"
+import { AuditCalendar } from "@/components/AuditCalendar"
 import { getSchemaTemplate } from "@/lib/firebase"
 import { parseAudit, type AuditFile } from "@/parsers/auditParser"
 import type { SchemaInstance, SchemaTemplate, ExcelData } from "@/types/excel"
@@ -179,7 +180,12 @@ export default function AuditPage() {
           </div>
         </Card>
 
-        {auditResults.length > 0 && <AuditDashboard auditFiles={auditResults} />}
+        {auditResults.length > 0 && (
+          <>
+            <AuditCalendar auditFiles={auditResults} />
+            <AuditDashboard auditFiles={auditResults} />
+          </>
+        )}
       </div>
     </div>
   )

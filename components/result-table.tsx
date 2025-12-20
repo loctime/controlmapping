@@ -6,6 +6,48 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Label } from "@/components/ui/label"
 import type { AuditFile } from "@/parsers/auditParser"
 
+/**
+ * Helpers para obtener métricas oficiales desde headers
+ * REGLA: Solo usar valores desde audit.headers (mapeados desde Excel)
+ */
+
+/**
+ * Obtiene el porcentaje de cumplimiento oficial desde headers
+ */
+function getCumplimientoPct(headers: AuditFile["headers"]): number | null {
+  const value =
+    headers.cumplimiento_total_pct ?? headers.porcentaje_cumplimiento ?? null
+
+  if (value === null || value === undefined) return null
+
+  if (typeof value === "number") return value
+  if (typeof value === "string") {
+    const num = parseFloat(value.replace(/%/g, "").replace(/,/g, ".").trim())
+    return isNaN(num) ? null : num
+  }
+
+  return null
+}
+
+/**
+ * Obtiene un valor numérico desde headers
+ */
+function getHeaderNumber(
+  headers: AuditFile["headers"],
+  key: string
+): number | null {
+  const value = headers[key]
+  if (value === null || value === undefined) return null
+
+  if (typeof value === "number") return value
+  if (typeof value === "string") {
+    const num = parseFloat(value.replace(/,/g, ".").trim())
+    return isNaN(num) ? null : num
+  }
+
+  return null
+}
+
 interface ResultTableProps {
   auditResults: AuditFile[]
 }
@@ -31,19 +73,12 @@ export function ResultTable({ auditResults }: ResultTableProps) {
   }
 
   // Obtener todas las columnas únicas de headers
+  // REGLA: Solo mostrar columnas desde headers (métricas oficiales)
   const allHeaderKeys = new Set<string>()
 
   safeResults.forEach((result) => {
     Object.keys(result.headers).forEach((key) => allHeaderKeys.add(key))
   })
-  
-  // Agregar columnas de totales (solo una vez)
-  allHeaderKeys.add("totalItems")
-  allHeaderKeys.add("cumple")
-  allHeaderKeys.add("cumple_parcial")
-  allHeaderKeys.add("no_cumple")
-  allHeaderKeys.add("no_aplica")
-  allHeaderKeys.add("porcentajeCumplimiento")
 
   const headerColumns = Array.from(allHeaderKeys).sort()
   
@@ -69,12 +104,6 @@ export function ResultTable({ auditResults }: ResultTableProps) {
   // Función helper para obtener labels legibles de las columnas
   const getColumnLabel = (col: string): string => {
     const labelMap: Record<string, string> = {
-      totalItems: "Total ítems",
-      cumple: "Cumple",
-      cumple_parcial: "Cumple parcial",
-      no_cumple: "No cumple",
-      no_aplica: "No aplica",
-      porcentajeCumplimiento: "% Cumplimiento",
       operacion: "Operación",
       responsable_operacion: "Responsable",
       cliente: "Cliente",
@@ -82,14 +111,15 @@ export function ResultTable({ auditResults }: ResultTableProps) {
       auditor: "Auditor",
       cantidad_items: "Cant. ítems",
       cumplimiento_total_pct: "% Cumplimiento total",
+      porcentaje_cumplimiento: "% Cumplimiento",
       puntos_obtenidos: "Puntos",
       cantidad_aplica: "Cant. aplica",
       cantidad_no_aplica: "Cant. no aplica",
       cantidad_cumple: "Cant. cumple",
+      cantidad_cumple_parcial: "Cant. cumple parcial",
       cantidad_no_cumple: "Cant. no cumple",
-      porcentaje_cumplimiento: "% Cumplimiento",
     }
-    return labelMap[col] || col
+    return labelMap[col] || col.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())
   }
 
   return (
@@ -119,53 +149,22 @@ export function ResultTable({ auditResults }: ResultTableProps) {
                 <TableRow key={`file-${fileIndex}`}>
                   <TableCell className="font-medium">{result.fileName}</TableCell>
                   {headerColumns.map((col) => {
-                    // Si es una columna de totales, usar result.totals
-                    if (col === "totalItems") {
+                    // REGLA: Solo usar valores desde headers (métricas oficiales)
+                    const value = result.headers[col]
+                    
+                    // Formatear porcentajes especiales
+                    if (col === "cumplimiento_total_pct" || col === "porcentaje_cumplimiento") {
+                      const pct = getCumplimientoPct(result.headers)
                       return (
                         <TableCell key={`header-${col}`}>
-                          {formatValue(result.totals.totalItems)}
+                          {pct !== null ? formatValue(pct) : ""}
                         </TableCell>
                       )
                     }
-                    if (col === "cumple") {
-                      return (
-                        <TableCell key={`header-${col}`}>
-                          {formatValue(result.totals.cumple)}
-                        </TableCell>
-                      )
-                    }
-                    if (col === "cumple_parcial") {
-                      return (
-                        <TableCell key={`header-${col}`}>
-                          {formatValue(result.totals.cumple_parcial)}
-                        </TableCell>
-                      )
-                    }
-                    if (col === "no_cumple") {
-                      return (
-                        <TableCell key={`header-${col}`}>
-                          {formatValue(result.totals.no_cumple)}
-                        </TableCell>
-                      )
-                    }
-                    if (col === "no_aplica") {
-                      return (
-                        <TableCell key={`header-${col}`}>
-                          {formatValue(result.totals.no_aplica)}
-                        </TableCell>
-                      )
-                    }
-                    if (col === "porcentajeCumplimiento") {
-                      return (
-                        <TableCell key={`header-${col}`}>
-                          {formatValue(result.totals.porcentajeCumplimiento)}
-                        </TableCell>
-                      )
-                    }
-                    // Para otras columnas, usar headers
+                    
                     return (
                       <TableCell key={`header-${col}`}>
-                        {result.headers[col] !== undefined ? formatValue(result.headers[col]) : ""}
+                        {value !== undefined && value !== null ? formatValue(value) : ""}
                       </TableCell>
                     )
                   })}

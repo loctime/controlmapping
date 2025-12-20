@@ -8,7 +8,9 @@ import { MappingSelector } from "@/components/mapping-selector"
 import { MultiFileUpload } from "@/components/multi-file-upload"
 import { ResultTable } from "@/components/result-table"
 import { DashboardGeneral } from "@/components/dashboard-general"
+import { AuditCalendar } from "@/components/AuditCalendar"
 import { getSchemaTemplate } from "@/lib/firebase"
+import { parseAudit, type AuditFile } from "@/parsers/auditParser"
 import type { SchemaInstance, SchemaTemplate, SchemaFieldMapping, ExcelData } from "@/types/excel"
 import { Loader2 } from "lucide-react"
 
@@ -33,6 +35,7 @@ export default function ProcessPage() {
   const [schemaTemplate, setSchemaTemplate] = useState<SchemaTemplate | null>(null)
   const [files, setFiles] = useState<File[]>([])
   const [results, setResults] = useState<ProcessedResult[]>([])
+  const [auditFiles, setAuditFiles] = useState<AuditFile[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -291,10 +294,15 @@ export default function ProcessPage() {
     setIsProcessing(true)
     setError(null)
     const processedResults: ProcessedResult[] = []
+    const auditResults: AuditFile[] = []
+
+    // Verificar si es un schema de auditoría
+    const isAuditSchema = schemaTemplate?.type === "audit"
 
     // LOG: Archivos recibidos
     console.log("=== INICIO PROCESAMIENTO ===")
     console.log(`📁 Archivos recibidos: ${files.length}`)
+    console.log(`📋 Tipo de schema: ${isAuditSchema ? "audit" : "general"}`)
     console.log("📋 Nombres de archivos:")
     files.forEach((file, idx) => {
       console.log(`  ${idx + 1}. ${file.name}`)
@@ -308,6 +316,19 @@ export default function ProcessPage() {
         // Leer el archivo Excel
         const excelData = await readExcelFile(file)
         console.log(`  ✓ Archivo leído. Filas: ${excelData.sheets[0].rows}, Columnas: ${excelData.sheets[0].cols}`)
+
+        // Si es schema de auditoría, usar parseAudit
+        if (isAuditSchema) {
+          try {
+            const auditFile = parseAudit(excelData, schemaTemplate, selectedMapping)
+            auditResults.push(auditFile)
+            console.log(`  ✅ Archivo procesado con parseAudit: ${file.name}`)
+            continue
+          } catch (err) {
+            console.error(`  ⚠ Error al procesar con parseAudit: ${err}`)
+            // Continuar con el procesamiento normal como fallback
+          }
+        }
 
         // Extraer datos de headers usando headerMappings
         const headers: Record<string, string | number> = {}
@@ -419,6 +440,7 @@ export default function ProcessPage() {
       console.log(`  - Archivos sin filas: ${filesWithoutRows}`)
 
       setResults(processedResults)
+      setAuditFiles(auditResults)
     } catch (err) {
       console.error("❌ Error al procesar archivos:", err)
       setError(`Error al procesar archivos: ${err instanceof Error ? err.message : "Error desconocido"}`)
@@ -474,6 +496,7 @@ export default function ProcessPage() {
 
         {results.length > 0 && (
           <>
+            {auditFiles.length > 0 && <AuditCalendar auditFiles={auditFiles} />}
             <DashboardGeneral results={results} />
             <ResultTable results={results} />
           </>

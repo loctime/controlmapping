@@ -262,7 +262,18 @@ function AuditDetailModal({
  * Componente principal del calendario de auditorías - Vista Operación/Mes
  */
 export function AuditCalendar({ auditFiles }: AuditCalendarProps) {
-  const [currentYear, setCurrentYear] = useState(new Date().getFullYear())
+  // Inicializar currentYear con el año más reciente de las auditorías disponibles
+  // Fallback al año actual si no hay fechas válidas
+  const initialYear = useMemo(() => {
+    const years = auditFiles
+      .map((af) => af.headers.fecha)
+      .filter((f): f is Date => f instanceof Date)
+      .map((d) => d.getFullYear())
+
+    return years.length > 0 ? Math.max(...years) : new Date().getFullYear()
+  }, [auditFiles])
+
+  const [currentYear, setCurrentYear] = useState(initialYear)
   const [selectedAudit, setSelectedAudit] = useState<AuditFile | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
 

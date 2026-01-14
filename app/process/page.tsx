@@ -13,6 +13,7 @@ import { getSchemaTemplate } from "@/lib/firebase"
 import { parseAudit, type AuditFile } from "@/parsers/auditParser"
 import type { SchemaInstance, SchemaTemplate, SchemaFieldMapping, ExcelData } from "@/types/excel"
 import { Loader2 } from "lucide-react"
+import { normalizeDate } from "@/utils/date"
 
 interface ProcessedResult {
   fileName: string
@@ -284,6 +285,25 @@ export default function ProcessPage() {
     return startRow
   }
 
+  /**
+   * Normaliza un valor de fecha a Date | null
+   * Centraliza la conversión para asegurar consistencia
+   * NUNCA retorna string - solo Date o null
+   */
+  const normalizeHeaderDate = (value: string | number | Date | null | undefined): Date | null => {
+    const normalized = normalizeDate(value)
+    
+    // Validación defensiva: si llegó algo que no es Date ni null, advertir
+    if (value !== null && value !== undefined && !(value instanceof Date)) {
+      const normalizedType = typeof normalized === "object" && normalized instanceof Date ? "Date" : typeof normalized
+      if (normalized === null) {
+        console.warn(`⚠️ normalizeHeaderDate: No se pudo convertir fecha. Valor: ${value}, Tipo: ${typeof value}`)
+      }
+    }
+    
+    return normalized
+  }
+
   // Función principal de procesamiento
   const processFiles = async () => {
     if (!selectedMapping || !schemaTemplate || files.length === 0) {
@@ -321,8 +341,141 @@ export default function ProcessPage() {
         if (isAuditSchema) {
           try {
             const auditFile = parseAudit(excelData, schemaTemplate, selectedMapping)
-            auditResults.push(auditFile)
+            
+            // Normalizar fecha a Date | null (requerido por AuditCalendar)
+            // NUNCA guardar strings de fecha en headers - solo Date | null
+            const fechaRaw = auditFile.headers.fecha
+            const fechaNormalizada: Date | null = normalizeHeaderDate(fechaRaw)
+            
+            // Validación defensiva: asegurar que fechaNormalizada sea Date o null, nunca string
+            if (fechaNormalizada !== null && !(fechaNormalizada instanceof Date)) {
+              console.error(`❌ ERROR: fechaNormalizada no es Date ni null. Valor: ${fechaNormalizada}, Tipo: ${typeof fechaNormalizada}`)
+              throw new Error(`Fecha normalizada inválida para ${file.name}`)
+            }
+            
+            if (fechaNormalizada) {
+              console.log(`  ✓ Fecha normalizada: ${fechaNormalizada.toISOString()} (tipo: Date)`)
+            } else {
+              console.log(`  ⚠ Fecha no encontrada o inválida para: ${file.name} (valor raw: ${fechaRaw}, tipo: ${typeof fechaRaw})`)
+            }
+            
+            // Normalizar cumplimiento_total_pct a number (requerido por AuditCalendar)
+            const cumplimientoRaw =
+              auditFile.headers.cumplimiento_total_pct ??
+              auditFile.headers.porcentaje_cumplimiento ??
+              auditFile.totals.porcentajeCumplimiento
+            let cumplimientoNormalizado: number
+            if (typeof cumplimientoRaw === "number") {
+              cumplimientoNormalizado = cumplimientoRaw
+              console.log(`  ✓ Cumplimiento ya es number: ${cumplimientoNormalizado}`)
+            } else if (typeof cumplimientoRaw === "string") {
+              // Convertir string a number (remover % y parsear)
+              const num = parseFloat(cumplimientoRaw.replace(/%/g, "").replace(/,/g, ".").trim())
+              cumplimientoNormalizado = isNaN(num) ? auditFile.totals.porcentajeCumplimiento : num
+              console.log(`  ✓ Cumplimiento convertido de string: "${cumplimientoRaw}" -> ${cumplimientoNormalizado}`)
+            } else {
+              cumplimientoNormalizado = auditFile.totals.porcentajeCumplimiento
+              console.log(`  ✓ Cumplimiento desde totals: ${cumplimientoNormalizado}`)
+            }
+            
+            // Log de validación final
+            console.log(`  📊 Validación AuditFile para ${file.name}:`)
+            console.log(`    - fecha: ${fechaNormalizada ? fechaNormalizada.toISOString() : 'null'} (tipo: ${fechaNormalizada instanceof Date ? 'Date' : typeof fechaNormalizada})`)
+            console.log(`    - cumplimiento_total_pct: ${cumplimientoNormalizado} (tipo: ${typeof cumplimientoNormalizado})`)
+            console.log(`    - operacion: ${auditFile.headers.operacion ?? auditFile.headers.cliente ?? auditFile.headers.establecimiento ?? 'Sin operación'}`)
+            
+            // Asegurar que fecha, cumplimiento_total_pct y operacion estén en headers (requerido por AuditCalendar)
+            // Crear una copia del auditFile con headers actualizados
+            // IMPORTANTE: fecha SIEMPRE debe ser Date | null, nunca string
+            const auditFileWithHeaders: AuditFile = {
+              ...auditFile,
+              headers: {
+                ...auditFile.headers,
+                // CRÍTICO: fecha debe ser Date | null, nunca string
+                fecha: fechaNormalizada,
+                cumplimiento_total_pct: cumplimientoNormalizado,
+                operacion:
+                  auditFile.headers.operacion ??
+                  auditFile.headers.cliente ??
+                  auditFile.headers.establecimiento ??
+                  "Sin operación",
+              },
+            }
+            
+            // Validación defensiva final: verificar que headers.fecha sea Date | null
+            const fechaFinal = auditFileWithHeaders.headers.fecha
+            if (fechaFinal !== null && !(fechaFinal instanceof Date)) {
+              console.error(`❌ ERROR CRÍTICO: auditFileWithHeaders.headers.fecha no es Date ni null. Valor: ${fechaFinal}, Tipo: ${typeof fechaFinal}`)
+              console.error(`  Archivo: ${file.name}`)
+              console.error(`  Headers completos:`, auditFileWithHeaders.headers)
+              throw new Error(`Headers.fecha inválido para ${file.name}: debe ser Date | null, recibido ${typeof fechaFinal}`)
+            }
+            
+            auditResults.push(auditFileWithHeaders)
             console.log(`  ✅ Archivo procesado con parseAudit: ${file.name}`)
+            
+            // Convertir AuditFile a ProcessedResult para unificar el flujo
+            // Usar auditFileWithHeaders para asegurar que tenga fecha y cumplimiento_total_pct
+            // Convertir headers: Date -> string/number
+            const processedHeaders: Record<string, string | number> = {}
+            Object.entries(auditFileWithHeaders.headers).forEach(([key, value]) => {
+              if (value instanceof Date) {
+                processedHeaders[key] = value.toISOString().split('T')[0] // Formato YYYY-MM-DD
+              } else if (value !== null && value !== undefined) {
+                processedHeaders[key] = value as string | number
+              }
+            })
+            
+            // Extraer fecha de headers si existe (ya está normalizada como Date en auditFileWithHeaders)
+            // La fecha ya está normalizada como Date | null en auditFileWithHeaders para AuditCalendar
+            const fechaConvertida: Date | null = auditFileWithHeaders.headers.fecha instanceof Date 
+              ? auditFileWithHeaders.headers.fecha 
+              : null
+            
+            // Asegurar que fecha esté en processedHeaders como string (para ProcessedResult)
+            if (fechaConvertida && !processedHeaders.fecha) {
+              processedHeaders.fecha = fechaConvertida.toISOString().split('T')[0] // Formato YYYY-MM-DD
+            }
+            
+            // Asegurar que cumplimiento_total_pct esté en headers (requerido por AuditCalendar)
+            // Ya debería estar en auditFileWithHeaders.headers, pero verificamos por si acaso
+            if (!processedHeaders.cumplimiento_total_pct && !processedHeaders.porcentaje_cumplimiento) {
+              processedHeaders.cumplimiento_total_pct = auditFileWithHeaders.totals.porcentajeCumplimiento
+            }
+            
+            // Convertir items a rows: cada item debe tener campos cumple, cumple_parcial, no_cumple, no_aplica
+            const processedRows: Array<Record<string, string | number>> = auditFileWithHeaders.items.map((item) => {
+              const row: Record<string, string | number> = {
+                pregunta: item.pregunta,
+                cumple: item.estado === "cumple" ? 1 : 0,
+                cumple_parcial: item.estado === "cumple_parcial" ? 1 : 0,
+                no_cumple: item.estado === "no_cumple" ? 1 : 0,
+                no_aplica: item.estado === "no_aplica" ? 1 : 0,
+              }
+              if (item.observaciones) {
+                row.observaciones = item.observaciones
+              }
+              return row
+            })
+            
+            // Construir ProcessedResult usando los totals de parseAudit
+            const processedResult: ProcessedResult = {
+              fileName: auditFileWithHeaders.fileName,
+              headers: processedHeaders,
+              rows: processedRows,
+              calculated: {
+                fecha: fechaConvertida,
+                totalItems: auditFileWithHeaders.totals.totalItems,
+                cumple: auditFileWithHeaders.totals.cumple,
+                cumple_parcial: auditFileWithHeaders.totals.cumple_parcial,
+                no_cumple: auditFileWithHeaders.totals.no_cumple,
+                no_aplica: auditFileWithHeaders.totals.no_aplica,
+                porcentajeCumplimiento: auditFileWithHeaders.totals.porcentajeCumplimiento,
+              },
+            }
+            
+            processedResults.push(processedResult)
+            console.log(`  ✅ ProcessedResult creado para auditoría: ${file.name} - Headers: ${Object.keys(processedHeaders).length}, Rows: ${processedRows.length}, Cumplimiento: ${auditFileWithHeaders.totals.porcentajeCumplimiento.toFixed(2)}%`)
             continue
           } catch (err) {
             console.error(`  ⚠ Error al procesar con parseAudit: ${err}`)
@@ -439,6 +592,35 @@ export default function ProcessPage() {
       console.log(`  - Archivos con filas: ${filesWithRows}`)
       console.log(`  - Archivos sin filas: ${filesWithoutRows}`)
 
+      // LOG: Validación final de auditFiles antes de guardar
+      console.log(`\n=== VALIDACIÓN FINAL DE AUDITFILES ===`)
+      console.log(`📊 Total de auditFiles: ${auditResults.length}`)
+      auditResults.forEach((af, idx) => {
+        const fecha = af.headers.fecha
+        const cumplimiento = af.headers.cumplimiento_total_pct
+        const operacion = af.headers.operacion
+        
+        // Validación defensiva: fecha debe ser Date | null
+        if (fecha !== null && !(fecha instanceof Date)) {
+          console.error(`❌ ERROR: auditFiles[${idx}].headers.fecha no es Date ni null`)
+          console.error(`  Archivo: ${af.fileName}`)
+          console.error(`  Valor: ${fecha}, Tipo: ${typeof fecha}`)
+          throw new Error(`Fecha inválida en auditFiles[${idx}]: debe ser Date | null`)
+        }
+        
+        // Validación defensiva: cumplimiento_total_pct debe ser number
+        if (cumplimiento !== null && typeof cumplimiento !== "number") {
+          console.error(`❌ ERROR: auditFiles[${idx}].headers.cumplimiento_total_pct no es number`)
+          console.error(`  Archivo: ${af.fileName}`)
+          console.error(`  Valor: ${cumplimiento}, Tipo: ${typeof cumplimiento}`)
+        }
+        
+        console.log(`  ${idx + 1}. ${af.fileName}:`)
+        console.log(`    - fecha: ${fecha ? fecha.toISOString() : 'null'} (tipo: ${fecha instanceof Date ? 'Date' : 'null'})`)
+        console.log(`    - cumplimiento_total_pct: ${cumplimiento} (tipo: ${typeof cumplimiento})`)
+        console.log(`    - operacion: ${operacion || 'null'}`)
+      })
+      
       setResults(processedResults)
       setAuditFiles(auditResults)
     } catch (err) {
@@ -448,6 +630,94 @@ export default function ProcessPage() {
       setIsProcessing(false)
     }
   }
+
+  // Función helper para convertir ProcessedResult a AuditFile (para ResultTable)
+  const convertToAuditFile = (result: ProcessedResult): AuditFile => {
+    // Convertir rows a items
+    const items = result.rows.map((row) => {
+      // Determinar el estado basado en los campos booleanos
+      let estado: "cumple" | "cumple_parcial" | "no_cumple" | "no_aplica" = "no_cumple"
+      if (checkBooleanValue(row.cumple)) {
+        estado = "cumple"
+      } else if (checkBooleanValue(row.cumple_parcial)) {
+        estado = "cumple_parcial"
+      } else if (checkBooleanValue(row.no_cumple)) {
+        estado = "no_cumple"
+      } else if (checkBooleanValue(row.no_aplica)) {
+        estado = "no_aplica"
+      }
+
+      return {
+        pregunta: String(row.pregunta || ""),
+        estado,
+        ...(row.observaciones ? { observaciones: String(row.observaciones) } : {}),
+      }
+    })
+
+    // Convertir headers: string | number -> string | number | Date | null
+    // IMPORTANTE: fecha debe ser Date | null, nunca string
+    const auditHeaders: Record<string, string | number | Date | null> = {}
+    Object.entries(result.headers).forEach(([key, value]) => {
+      // Si es el campo fecha, normalizarlo SIEMPRE a Date | null
+      if (key === "fecha") {
+        auditHeaders[key] = normalizeHeaderDate(value as string | number | Date | null | undefined)
+      } else {
+        // Para otros campos, mantener el valor original
+        auditHeaders[key] = value !== null && value !== undefined ? value : null
+      }
+    })
+
+    // Asegurar que la fecha esté en headers si está en calculated
+    // calculated.fecha ya es Date | null, así que podemos usarlo directamente
+    if (result.calculated.fecha && !auditHeaders.fecha) {
+      auditHeaders.fecha = result.calculated.fecha
+    }
+    
+    // Validación defensiva: verificar que fecha sea Date | null
+    if (auditHeaders.fecha !== null && !(auditHeaders.fecha instanceof Date)) {
+      console.warn(`⚠️ convertToAuditFile: fecha no es Date ni null. Valor: ${auditHeaders.fecha}, Tipo: ${typeof auditHeaders.fecha}`)
+      // Intentar normalizar de nuevo
+      auditHeaders.fecha = normalizeHeaderDate(auditHeaders.fecha as string | number | Date | null | undefined)
+    }
+    
+    // Asegurar que cumplimiento_total_pct esté en headers (requerido por AuditCalendar)
+    // Si no está presente en headers, usar el porcentaje calculado
+    if (!auditHeaders.cumplimiento_total_pct && !auditHeaders.porcentaje_cumplimiento) {
+      auditHeaders.cumplimiento_total_pct = result.calculated.porcentajeCumplimiento
+    }
+
+    return {
+      fileName: result.fileName,
+      headers: auditHeaders,
+      items,
+      totals: {
+        totalItems: result.calculated.totalItems,
+        cumple: result.calculated.cumple,
+        cumple_parcial: result.calculated.cumple_parcial,
+        no_cumple: result.calculated.no_cumple,
+        no_aplica: result.calculated.no_aplica,
+        porcentajeCumplimiento: result.calculated.porcentajeCumplimiento,
+      },
+    }
+  }
+
+  // Combinar auditFiles con ProcessedResult convertidos para ResultTable
+  // IMPORTANTE: Solo incluir auditFiles que ya tienen fecha como Date | null
+  // Los ProcessedResult convertidos también deben tener fecha normalizada
+  const allAuditFilesForTable: AuditFile[] = [
+    ...auditFiles,
+    ...results
+      .filter((r) => !auditFiles.some((af) => af.fileName === r.fileName))
+      .map(convertToAuditFile)
+      .map((af) => {
+        // Validación defensiva: asegurar que fecha sea Date | null
+        if (af.headers.fecha !== null && !(af.headers.fecha instanceof Date)) {
+          console.warn(`⚠️ allAuditFilesForTable: Normalizando fecha inválida para ${af.fileName}`)
+          af.headers.fecha = normalizeHeaderDate(af.headers.fecha as string | number | Date | null | undefined)
+        }
+        return af
+      }),
+  ]
 
   const canProcess = selectedMapping !== null && schemaTemplate !== null && files.length > 0 && !isProcessing
 
@@ -498,9 +768,27 @@ export default function ProcessPage() {
 
         {results.length > 0 && (
           <>
-            {auditFiles.length > 0 && <AuditCalendar auditFiles={auditFiles} />}
+            {auditFiles.length > 0 && (
+              <AuditCalendar 
+                auditFiles={auditFiles.map((af) => {
+                  // Validación defensiva final antes de pasar a AuditCalendar
+                  // Asegurar que fecha sea Date | null
+                  if (af.headers.fecha !== null && !(af.headers.fecha instanceof Date)) {
+                    console.warn(`⚠️ AuditCalendar: Normalizando fecha inválida para ${af.fileName}`)
+                    return {
+                      ...af,
+                      headers: {
+                        ...af.headers,
+                        fecha: normalizeHeaderDate(af.headers.fecha as string | number | Date | null | undefined),
+                      },
+                    }
+                  }
+                  return af
+                })} 
+              />
+            )}
             <DashboardGeneral results={results} />
-            <ResultTable results={results} />
+            <ResultTable auditResults={allAuditFilesForTable} />
           </>
         )}
         </div>

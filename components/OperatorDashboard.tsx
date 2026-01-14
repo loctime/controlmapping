@@ -1,14 +1,15 @@
 "use client"
 
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Card } from "@/components/ui/card"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 import { BarChart, Bar, PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid } from "recharts"
 import { Label } from "@/components/ui/label"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { TrendingUp, FileCheck, AlertTriangle, CheckCircle2, Info, ArrowLeft, User } from "lucide-react"
+import { TrendingUp, FileCheck, AlertTriangle, CheckCircle2, Info, ArrowLeft, User, ChevronDown, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import type { AuditFile } from "@/parsers/auditParser"
 import { useDashboardMetrics } from "@/hooks/useDashboardMetrics"
 import { normalizeDate } from "@/utils/date"
@@ -230,6 +231,22 @@ export function OperatorDashboard({
 
     return historial.sort((a, b) => b.fecha.getTime() - a.fecha.getTime())
   }, [operatorAudits])
+
+  // Estado para manejar qué archivos están expandidos
+  const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set())
+
+  // Función para toggle del estado de expansión de un archivo
+  const toggleFile = (fileName: string) => {
+    setExpandedFiles((prev) => {
+      const newSet = new Set(prev)
+      if (newSet.has(fileName)) {
+        newSet.delete(fileName)
+      } else {
+        newSet.add(fileName)
+      }
+      return newSet
+    })
+  }
 
   if (operatorAudits.length === 0) {
     return (
@@ -655,47 +672,75 @@ export function OperatorDashboard({
                 Registro temporal de observaciones identificadas
               </p>
             </div>
-            <div className="space-y-4">
-              {historialObservaciones.map((item, idx) => (
-                <div key={idx} className="border rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <div>
-                      <p className="font-medium">{item.auditoria}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {item.fecha.toLocaleDateString("es-AR", {
-                          year: "numeric",
-                          month: "long",
-                          day: "numeric",
-                        })}
-                      </p>
+            <div className="space-y-2">
+              {historialObservaciones.map((item, idx) => {
+                const isExpanded = expandedFiles.has(item.auditoria)
+                return (
+                  <Collapsible
+                    key={idx}
+                    open={isExpanded}
+                    onOpenChange={() => toggleFile(item.auditoria)}
+                  >
+                    <div className="border rounded-lg overflow-hidden">
+                      <CollapsibleTrigger asChild>
+                        <div className="w-full p-4 hover:bg-muted/50 transition-colors cursor-pointer">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3 flex-1 min-w-0">
+                              <div className="flex-shrink-0">
+                                {isExpanded ? (
+                                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                                ) : (
+                                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                                )}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="font-medium text-left truncate">
+                                  {item.auditoria}
+                                </p>
+                                <p className="text-xs text-muted-foreground text-left mt-1">
+                                  {item.fecha.toLocaleDateString("es-AR", {
+                                    year: "numeric",
+                                    month: "long",
+                                    day: "numeric",
+                                  })}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3 flex-shrink-0 ml-4">
+                              <span className="text-xs font-medium text-orange-600 whitespace-nowrap">
+                                {item.items.length} observación{item.items.length !== 1 ? "es" : ""}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent className="data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down overflow-hidden">
+                        <div className="px-4 pb-4 pt-2 space-y-2 border-t bg-muted/20">
+                          {item.items.map((itemData, itemIdx) => (
+                            <div
+                              key={itemIdx}
+                              className="p-3 bg-background rounded text-sm border"
+                            >
+                              <p className="font-medium">{itemData.pregunta}</p>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                Estado:{" "}
+                                {itemData.estado === "no_cumple"
+                                  ? "No Cumple"
+                                  : "Cumple Parcial"}
+                              </p>
+                              {itemData.observaciones && (
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  {itemData.observaciones}
+                                </p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </CollapsibleContent>
                     </div>
-                    <span className="text-xs font-medium text-orange-600">
-                      {item.items.length} observación{item.items.length !== 1 ? "es" : ""}
-                    </span>
-                  </div>
-                  <div className="mt-3 space-y-2">
-                    {item.items.map((itemData, itemIdx) => (
-                      <div
-                        key={itemIdx}
-                        className="p-2 bg-muted/30 rounded text-sm"
-                      >
-                        <p className="font-medium">{itemData.pregunta}</p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Estado:{" "}
-                          {itemData.estado === "no_cumple"
-                            ? "No Cumple"
-                            : "Cumple Parcial"}
-                        </p>
-                        {itemData.observaciones && (
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {itemData.observaciones}
-                          </p>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
+                  </Collapsible>
+                )
+              })}
             </div>
           </div>
         </Card>

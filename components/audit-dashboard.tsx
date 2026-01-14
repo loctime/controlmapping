@@ -1,6 +1,7 @@
 "use client"
 
 import { useMemo } from "react"
+import { useRouter } from "next/navigation"
 import { Card } from "@/components/ui/card"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 import { BarChart, Bar, PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Legend } from "recharts"
@@ -338,7 +339,34 @@ function getExecutiveSummaryForRanking(
   return partes.join(", ") + "."
 }
 
+/**
+ * Guarda los datos de auditorías en localStorage para compartir entre páginas
+ */
+function saveAuditFilesToStorage(auditFiles: AuditFile[]) {
+  if (typeof window !== "undefined") {
+    try {
+      // Serializar solo los datos necesarios (sin funciones, fechas como strings)
+      const serialized = JSON.stringify(auditFiles, (key, value) => {
+        if (value instanceof Date) {
+          return value.toISOString()
+        }
+        return value
+      })
+      localStorage.setItem("auditFiles", serialized)
+    } catch (err) {
+      console.error("Error al guardar auditFiles en localStorage:", err)
+    }
+  }
+}
+
 export function AuditDashboard({ auditFiles }: AuditDashboardProps) {
+  const router = useRouter()
+
+  // Guardar datos en localStorage cuando cambian
+  useMemo(() => {
+    saveAuditFilesToStorage(auditFiles)
+  }, [auditFiles])
+
   // Detectar disponibilidad de datos desde headers
   const dataAvailability = useMemo(() => {
     if (auditFiles.length === 0) {
@@ -1352,7 +1380,7 @@ export function AuditDashboard({ auditFiles }: AuditDashboardProps) {
               )}
             </div>
             <p className="text-sm text-muted-foreground">
-              Top 10 operaciones por % de cumplimiento
+              Top 10 operaciones por % de cumplimiento (click para ver detalles)
             </p>
             <div className="mt-3 p-3 bg-muted/30 rounded-lg border border-muted">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Lectura Ejecutiva</p>
@@ -1392,6 +1420,14 @@ export function AuditDashboard({ auditFiles }: AuditDashboardProps) {
                 <Bar 
                   dataKey="cumplimiento" 
                   radius={[0, 8, 8, 0]}
+                  onClick={(data) => {
+                    if (data && data.operacion) {
+                      // Codificar el nombre de la operación para la URL
+                      const operationId = encodeURIComponent(data.operacion)
+                      router.push(`/dashboard/operation/${operationId}`)
+                    }
+                  }}
+                  style={{ cursor: "pointer" }}
                 >
                   {rankingOperaciones.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={getCumplimientoColor(entry.cumplimiento)} />
@@ -1440,7 +1476,7 @@ export function AuditDashboard({ auditFiles }: AuditDashboardProps) {
               )}
             </div>
             <p className="text-sm text-muted-foreground">
-              Top 10 operaciones con menor % de cumplimiento promedio
+              Top 10 operaciones con menor % de cumplimiento promedio (click para ver detalles)
             </p>
             <div className="mt-3 p-3 bg-muted/30 rounded-lg border border-muted">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Lectura Ejecutiva</p>
@@ -1480,6 +1516,14 @@ export function AuditDashboard({ auditFiles }: AuditDashboardProps) {
                 <Bar 
                   dataKey="cumplimiento" 
                   radius={[0, 8, 8, 0]}
+                  onClick={(data) => {
+                    if (data && data.operacion) {
+                      // Codificar el nombre de la operación para la URL
+                      const operationId = encodeURIComponent(data.operacion)
+                      router.push(`/dashboard/operation/${operationId}`)
+                    }
+                  }}
+                  style={{ cursor: "pointer" }}
                 >
                   {rankingInversoOperaciones.map((entry, index) => (
                     <Cell key={`cell-inverse-${index}`} fill={getCumplimientoColor(entry.cumplimiento)} />

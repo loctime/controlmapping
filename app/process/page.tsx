@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import * as XLSX from "xlsx"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -8,7 +8,13 @@ import { AuditHeader } from "@/components/audit-header"
 import { MultiFileUpload } from "@/components/multi-file-upload"
 import { ResultTable } from "@/components/result-table"
 import { DashboardGeneral } from "@/components/dashboard-general"
+import { AuditDashboard } from "@/components/audit-dashboard"
+import { OperationDashboard } from "@/components/OperationDashboard"
+import { OperatorDashboard } from "@/components/OperatorDashboard"
 import { AuditCalendar } from "@/components/AuditCalendar"
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Label } from "@/components/ui/label"
 import { getSchemaTemplate } from "@/lib/firebase"
 import { parseAudit, type AuditFile } from "@/parsers/auditParser"
 import type { SchemaInstance, SchemaTemplate, SchemaFieldMapping, ExcelData } from "@/types/excel"
@@ -39,6 +45,11 @@ export default function ProcessPage() {
   const [auditFiles, setAuditFiles] = useState<AuditFile[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  
+  // Estados para tabs y selecciones
+  const [activeTab, setActiveTab] = useState<"general" | "operation" | "operator">("general")
+  const [selectedOperationId, setSelectedOperationId] = useState<string>("")
+  const [selectedOperatorId, setSelectedOperatorId] = useState<string>("")
 
   // Cargar schema template cuando se selecciona un mapping
   const handleMappingSelect = async (mapping: (SchemaInstance & { id: string; name: string }) | null) => {
@@ -721,6 +732,43 @@ export default function ProcessPage() {
 
   const canProcess = selectedMapping !== null && schemaTemplate !== null && files.length > 0 && !isProcessing
 
+  // Obtener lista única de operaciones
+  const availableOperations = useMemo(() => {
+    const operationsSet = new Set<string>()
+    auditFiles.forEach((audit) => {
+      const operacion = audit.headers.operacion
+      if (operacion) {
+        operationsSet.add(String(operacion).trim())
+      }
+    })
+    return Array.from(operationsSet).sort()
+  }, [auditFiles])
+
+  // Obtener lista única de operarios
+  const availableOperators = useMemo(() => {
+    const operatorsSet = new Set<string>()
+    auditFiles.forEach((audit) => {
+      const operario =
+        audit.headers.operario ||
+        audit.headers.auditor ||
+        audit.headers.responsable ||
+        null
+      if (operario) {
+        operatorsSet.add(String(operario).trim())
+      }
+    })
+    return Array.from(operatorsSet).sort()
+  }, [auditFiles])
+
+  // Resetear selecciones cuando cambia el tab
+  const handleTabChange = (value: string) => {
+    setActiveTab(value as "general" | "operation" | "operator")
+    if (value === "general") {
+      setSelectedOperationId("")
+      setSelectedOperatorId("")
+    }
+  }
+
   return (
     <div className="min-h-screen flex flex-col">
       <AuditHeader 
@@ -787,8 +835,141 @@ export default function ProcessPage() {
                 })} 
               />
             )}
-            <DashboardGeneral results={results} />
-            <ResultTable auditResults={allAuditFilesForTable} />
+            
+            {/* Tabs para navegar entre vistas */}
+            <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
+              <TabsList className="grid w-full max-w-md grid-cols-3">
+                <TabsTrigger value="general">General</TabsTrigger>
+                <TabsTrigger value="operation">Por Operación</TabsTrigger>
+                <TabsTrigger value="operator">Por Operario</TabsTrigger>
+              </TabsList>
+
+              {/* Vista General */}
+              <TabsContent value="general" className="mt-6">
+                {auditFiles.length > 0 ? (
+                  <AuditDashboard auditFiles={auditFiles} />
+                ) : (
+                  <DashboardGeneral results={results} />
+                )}
+                <ResultTable auditResults={allAuditFilesForTable} />
+              </TabsContent>
+
+              {/* Vista Por Operación */}
+              <TabsContent value="operation" className="mt-6">
+                <Card className="p-6 mb-6">
+                  <div className="space-y-4">
+                    <div>
+                      <Label htmlFor="operation-select" className="text-base font-semibold">
+                        Seleccionar Operación
+                      </Label>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Elegí una operación para ver su dashboard detallado
+                      </p>
+                    </div>
+                    <Select
+                      value={selectedOperationId}
+                      onValueChange={setSelectedOperationId}
+                    >
+                      <SelectTrigger id="operation-select" className="w-full max-w-md">
+                        <SelectValue placeholder="Seleccionar operación..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableOperations.length > 0 ? (
+                          availableOperations.map((operation) => (
+                            <SelectItem key={operation} value={operation}>
+                              {operation}
+                            </SelectItem>
+                          ))
+                        ) : (
+                          <SelectItem value="none" disabled>
+                            No hay operaciones disponibles
+                          </SelectItem>
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </Card>
+
+                {selectedOperationId ? (
+                  <OperationDashboard
+                    auditFiles={auditFiles}
+                    operationId={selectedOperationId}
+                    hideNavigation={true}
+                  />
+                ) : (
+                  <Card className="p-12">
+                    <div className="text-center space-y-2">
+                      <p className="text-lg font-medium text-muted-foreground">
+                        Seleccioná una operación para ver su dashboard
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {availableOperations.length > 0
+                          ? `${availableOperations.length} operación${availableOperations.length !== 1 ? "es" : ""} disponible${availableOperations.length !== 1 ? "s" : ""}`
+                          : "No hay operaciones disponibles en los datos procesados"}
+                      </p>
+                    </div>
+                  </Card>
+                )}
+              </TabsContent>
+
+              {/* Vista Por Operario */}
+              <TabsContent value="operator" className="mt-6">
+                <Card className="p-6 mb-6">
+                  <div className="space-y-4">
+                    <div>
+                      <Label htmlFor="operator-select" className="text-base font-semibold">
+                        Seleccionar Operario
+                      </Label>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Elegí un operario para ver su dashboard detallado
+                      </p>
+                    </div>
+                    <Select
+                      value={selectedOperatorId}
+                      onValueChange={setSelectedOperatorId}
+                    >
+                      <SelectTrigger id="operator-select" className="w-full max-w-md">
+                        <SelectValue placeholder="Seleccionar operario..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableOperators.length > 0 ? (
+                          availableOperators.map((operator) => (
+                            <SelectItem key={operator} value={operator}>
+                              {operator}
+                            </SelectItem>
+                          ))
+                        ) : (
+                          <SelectItem value="none" disabled>
+                            No hay operarios disponibles
+                          </SelectItem>
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </Card>
+
+                {selectedOperatorId ? (
+                  <OperatorDashboard
+                    auditFiles={auditFiles}
+                    operatorId={selectedOperatorId}
+                    hideNavigation={true}
+                  />
+                ) : (
+                  <Card className="p-12">
+                    <div className="text-center space-y-2">
+                      <p className="text-lg font-medium text-muted-foreground">
+                        Seleccioná un operario para ver su dashboard
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {availableOperators.length > 0
+                          ? `${availableOperators.length} operario${availableOperators.length !== 1 ? "s" : ""} disponible${availableOperators.length !== 1 ? "s" : ""}`
+                          : "No hay operarios disponibles en los datos procesados"}
+                      </p>
+                    </div>
+                  </Card>
+                )}
+              </TabsContent>
+            </Tabs>
           </>
         )}
         </div>

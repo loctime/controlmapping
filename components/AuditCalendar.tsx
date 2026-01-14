@@ -92,6 +92,85 @@ function getMonthIndex(date: Date | null): number | null {
 }
 
 /**
+ * Formatea un valor de header para presentación visual
+ * - Detecta porcentajes (0-1 o valores >1 con indicadores de porcentaje)
+ * - Limita a máximo 2 decimales
+ * - Quita decimales innecesarios (.00)
+ * - Mantiene enteros como enteros
+ * - NO modifica los valores originales, solo formatea para UI
+ */
+function formatHeaderValue(
+  value: unknown | string | number,
+  key?: string
+): string {
+  // Manejar null/undefined
+  if (value === null || value === undefined) {
+    return "N/A"
+  }
+
+  // Manejar fechas (deben ser formateadas por formatDateDDMMAAAA)
+  if (value instanceof Date) {
+    return formatDateDDMMAAAA(value)
+  }
+
+  // Convertir a número si es posible
+  let numValue: number | null = null
+
+  if (typeof value === "number") {
+    numValue = value
+  } else if (typeof value === "string") {
+    // Intentar parsear el string como número
+    const cleaned = value.replace(/%/g, "").replace(/,/g, ".").trim()
+    const parsed = parseFloat(cleaned)
+    if (!isNaN(parsed)) {
+      numValue = parsed
+    } else {
+      // Si no es un número, devolver el string original
+      return value
+    }
+  } else {
+    // Para otros tipos, convertir a string
+    return String(value)
+  }
+
+  // Si no es un número válido, devolver string original
+  if (numValue === null || isNaN(numValue)) {
+    return String(value)
+  }
+
+  // Detectar si es un porcentaje
+  const isPercentage =
+    // Valores entre 0 y 1 (probablemente decimal que necesita multiplicarse por 100)
+    (numValue >= 0 && numValue <= 1) ||
+    // Claves que indican porcentaje (valores > 1 que ya están en formato 0-100)
+    (key &&
+      (key.toLowerCase().includes("pct") ||
+        key.toLowerCase().includes("porcentaje") ||
+        key.toLowerCase().includes("cumplimiento")) &&
+      numValue > 1)
+
+  // Formatear según el tipo
+  if (isPercentage) {
+    // Si está entre 0-1, multiplicar por 100
+    const displayValue = numValue <= 1 ? numValue * 100 : numValue
+
+    // Limitar a 2 decimales y quitar .00
+    const formatted = displayValue.toFixed(2).replace(/\.00$/, "")
+    return `${formatted}%`
+  } else {
+    // Para números normales
+    // Si es entero, mostrar sin decimales
+    if (Number.isInteger(numValue)) {
+      return numValue.toString()
+    }
+
+    // Limitar a 2 decimales y quitar .00
+    const formatted = numValue.toFixed(2).replace(/\.00$/, "")
+    return formatted
+  }
+}
+
+/**
  * Modal de detalles de auditoría
  */
 function AuditDetailModal({
@@ -169,7 +248,10 @@ function AuditDetailModal({
                 <div className="text-center p-3 rounded-md bg-muted/50">
                   <p className="text-xs text-muted-foreground">Total Items</p>
                   <p className="text-lg font-bold">
-                    {getHeaderNumber(auditFile.headers, "cantidad_items")}
+                    {formatHeaderValue(
+                      auditFile.headers.cantidad_items,
+                      "cantidad_items"
+                    )}
                   </p>
                 </div>
               )}
@@ -177,7 +259,10 @@ function AuditDetailModal({
                 <div className="text-center p-3 rounded-md bg-green-500/10">
                   <p className="text-xs text-muted-foreground">Cumple</p>
                   <p className="text-lg font-bold text-green-700 dark:text-green-400">
-                    {getHeaderNumber(auditFile.headers, "cantidad_cumple")}
+                    {formatHeaderValue(
+                      auditFile.headers.cantidad_cumple,
+                      "cantidad_cumple"
+                    )}
                   </p>
                 </div>
               )}
@@ -185,7 +270,10 @@ function AuditDetailModal({
                 <div className="text-center p-3 rounded-md bg-yellow-500/10">
                   <p className="text-xs text-muted-foreground">Cumple Parcial</p>
                   <p className="text-lg font-bold text-yellow-700 dark:text-yellow-400">
-                    {getHeaderNumber(auditFile.headers, "cantidad_cumple_parcial")}
+                    {formatHeaderValue(
+                      auditFile.headers.cantidad_cumple_parcial,
+                      "cantidad_cumple_parcial"
+                    )}
                   </p>
                 </div>
               )}
@@ -193,7 +281,10 @@ function AuditDetailModal({
                 <div className="text-center p-3 rounded-md bg-red-500/10">
                   <p className="text-xs text-muted-foreground">No Cumple</p>
                   <p className="text-lg font-bold text-red-700 dark:text-red-400">
-                    {getHeaderNumber(auditFile.headers, "cantidad_no_cumple")}
+                    {formatHeaderValue(
+                      auditFile.headers.cantidad_no_cumple,
+                      "cantidad_no_cumple"
+                    )}
                   </p>
                 </div>
               )}
@@ -203,7 +294,10 @@ function AuditDetailModal({
                 <div className="text-center p-3 rounded-md bg-muted/50">
                   <p className="text-xs text-muted-foreground">No Aplica</p>
                   <p className="text-lg font-bold">
-                    {getHeaderNumber(auditFile.headers, "cantidad_no_aplica")}
+                    {formatHeaderValue(
+                      auditFile.headers.cantidad_no_aplica,
+                      "cantidad_no_aplica"
+                    )}
                   </p>
                 </div>
               )}
@@ -216,7 +310,11 @@ function AuditDetailModal({
                 >
                   <p className="text-xs text-muted-foreground">% Cumplimiento</p>
                   <p className="text-lg font-bold">
-                    {getCumplimientoPct(auditFile.headers)!.toFixed(2)}%
+                    {formatHeaderValue(
+                      auditFile.headers.cumplimiento_total_pct ??
+                        auditFile.headers.porcentaje_cumplimiento,
+                      "cumplimiento_total_pct"
+                    )}
                   </p>
                 </div>
               )}
@@ -241,11 +339,7 @@ function AuditDetailModal({
                         {key.replace(/_/g, " ")}
                       </p>
                       <p className="text-sm font-medium">
-                        {value === null || value === undefined
-                          ? "N/A"
-                          : value instanceof Date
-                            ? formatDateDDMMAAAA(value)
-                            : String(value)}
+                        {formatHeaderValue(value, key)}
                       </p>
                     </div>
                   ))}

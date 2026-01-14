@@ -508,12 +508,6 @@ export function AuditCalendar({ auditFiles }: AuditCalendarProps) {
                         }
                         
                         const colorClass = getCumplimientoColor(porcentaje)
-                        const responsable = audit.headers.responsable_operacion
-                          ? String(audit.headers.responsable_operacion)
-                          : null
-                        const auditor = audit.headers.auditor
-                          ? String(audit.headers.auditor)
-                          : null
 
                         return (
                           <div
@@ -527,24 +521,9 @@ export function AuditCalendar({ auditFiles }: AuditCalendarProps) {
                             <div className="font-medium text-[10px] mb-0.5 truncate" title={operacion}>
                               {operacion}
                             </div>
-                            <div className="font-bold text-xs mb-0.5">
+                            <div className="font-bold text-xs">
                               {porcentaje.toFixed(0)}%
                             </div>
-                            {responsable && (
-                              <div className="text-[10px] opacity-80 truncate">
-                                R: {responsable}
-                              </div>
-                            )}
-                            {auditor && (
-                              <div className="text-[10px] opacity-80 truncate">
-                                A: {auditor}
-                              </div>
-                            )}
-                            {allAudits.length > 1 && (
-                              <div className="text-[10px] mt-0.5 opacity-60">
-                                +{allAudits.length - 1}
-                              </div>
-                            )}
                           </div>
                         )
                       })

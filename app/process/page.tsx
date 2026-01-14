@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import * as XLSX from "xlsx"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -15,10 +15,11 @@ import { AuditCalendar } from "@/components/AuditCalendar"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { getSchemaTemplate } from "@/lib/firebase"
 import { parseAudit, type AuditFile } from "@/parsers/auditParser"
 import type { SchemaInstance, SchemaTemplate, SchemaFieldMapping, ExcelData } from "@/types/excel"
-import { Loader2 } from "lucide-react"
+import { Loader2, ChevronDown, ChevronUp, FileSpreadsheet } from "lucide-react"
 import { normalizeDate } from "@/utils/date"
 
 interface ProcessedResult {
@@ -45,11 +46,21 @@ export default function ProcessPage() {
   const [auditFiles, setAuditFiles] = useState<AuditFile[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [isUploadCollapsed, setIsUploadCollapsed] = useState(false)
   
   // Estados para tabs y selecciones
   const [activeTab, setActiveTab] = useState<"general" | "operation" | "operator">("general")
   const [selectedOperationId, setSelectedOperationId] = useState<string>("")
   const [selectedOperatorId, setSelectedOperatorId] = useState<string>("")
+
+  // Colapsar automáticamente cuando hay archivos procesados
+  useEffect(() => {
+    if (auditFiles.length > 0 || results.length > 0) {
+      setIsUploadCollapsed(true)
+    } else {
+      setIsUploadCollapsed(false)
+    }
+  }, [auditFiles.length, results.length])
 
   // Cargar schema template cuando se selecciona un mapping
   const handleMappingSelect = async (mapping: (SchemaInstance & { id: string; name: string }) | null) => {
@@ -790,29 +801,99 @@ export default function ProcessPage() {
             </Card>
           )}
 
-          <MultiFileUpload files={files} onFilesChange={setFiles} />
-
-        <Card className="p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-medium text-foreground">Procesar archivos</p>
-              <p className="text-sm text-muted-foreground">
-                {files.length} archivo{files.length !== 1 ? "s" : ""} seleccionado{files.length !== 1 ? "s" : ""}
-                {selectedMapping && ` • Mapeo: ${selectedMapping.name}`}
-              </p>
-            </div>
-            <Button onClick={processFiles} disabled={!canProcess}>
-              {isProcessing ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Procesando...
-                </>
-              ) : (
-                "Procesar archivos"
+          <Collapsible open={!isUploadCollapsed} onOpenChange={(open) => setIsUploadCollapsed(!open)}>
+            <Card className="overflow-hidden">
+              {/* Barra compacta cuando está colapsado */}
+              {(auditFiles.length > 0 || results.length > 0) && (
+                <CollapsibleTrigger asChild>
+                  <div className={`p-4 cursor-pointer hover:bg-muted/50 transition-colors ${isUploadCollapsed ? 'border-b' : 'hidden'}`}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4 flex-1 min-w-0">
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <FileSpreadsheet className="h-5 w-5 shrink-0" />
+                          <span className="text-sm font-medium">
+                            {(auditFiles.length > 0 ? auditFiles.length : results.length)} archivo{(auditFiles.length > 0 ? auditFiles.length : results.length) !== 1 ? "s" : ""} procesado{(auditFiles.length > 0 ? auditFiles.length : results.length) !== 1 ? "s" : ""}
+                          </span>
+                        </div>
+                        {selectedMapping && (
+                          <div className="text-sm text-muted-foreground truncate">
+                            • Mapeo: <span className="font-medium text-foreground">{selectedMapping.name}</span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setIsUploadCollapsed(false)
+                          }}
+                        >
+                          Ver archivos
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setFiles([])
+                            setResults([])
+                            setAuditFiles([])
+                            setIsUploadCollapsed(false)
+                          }}
+                        >
+                          Reprocesar
+                        </Button>
+                        <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                      </div>
+                    </div>
+                  </div>
+                </CollapsibleTrigger>
               )}
-            </Button>
-          </div>
-        </Card>
+
+              {/* Contenido completo cuando está expandido */}
+              <CollapsibleContent className="data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down overflow-hidden">
+                <div className="p-4 space-y-4">
+                  {!isUploadCollapsed && (
+                    <div className="flex items-center justify-between pb-2 border-b">
+                      <h3 className="text-lg font-semibold">Subir y procesar archivos</h3>
+                      <CollapsibleTrigger asChild>
+                        <Button variant="ghost" size="sm">
+                          <ChevronUp className="h-4 w-4 mr-2" />
+                          Colapsar
+                        </Button>
+                      </CollapsibleTrigger>
+                    </div>
+                  )}
+                  
+                  <MultiFileUpload files={files} onFilesChange={setFiles} />
+
+                  <Card className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium text-foreground">Procesar archivos</p>
+                        <p className="text-sm text-muted-foreground">
+                          {files.length} archivo{files.length !== 1 ? "s" : ""} seleccionado{files.length !== 1 ? "s" : ""}
+                          {selectedMapping && ` • Mapeo: ${selectedMapping.name}`}
+                        </p>
+                      </div>
+                      <Button onClick={processFiles} disabled={!canProcess}>
+                        {isProcessing ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Procesando...
+                          </>
+                        ) : (
+                          "Procesar archivos"
+                        )}
+                      </Button>
+                    </div>
+                  </Card>
+                </div>
+              </CollapsibleContent>
+            </Card>
+          </Collapsible>
 
         {results.length > 0 && (
           <>

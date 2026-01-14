@@ -464,59 +464,49 @@ export function AuditCalendar({ auditFiles }: AuditCalendarProps) {
             </AlertDescription>
           </Alert>
         )}
-        <div className="w-full overflow-x-auto">
-          <div className="inline-block min-w-full">
-            <table className="w-full border-collapse">
-              <thead>
-                <tr>
-                  <th className="sticky left-0 z-10 bg-background border p-2 text-left font-semibold min-w-[200px]">
-                    OPERACIÓN
-                  </th>
-                  {MONTHS.map((month) => (
-                    <th
-                      key={month}
-                      className="border p-2 text-center font-semibold min-w-[120px]"
-                    >
-                      {month}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {operaciones.map((operacion) => {
-                  const operacionMap = dataByOperacionAndMonth.get(operacion)!
-                  
-                  return (
-                    <tr key={operacion}>
-                      <td className="sticky left-0 z-10 bg-background border p-2 font-medium">
-                        {operacion}
-                      </td>
-                      {MONTHS.map((_, monthIndex) => {
+        <div className="w-full">
+          <div className="grid grid-cols-12 gap-1">
+            {MONTHS.map((month, monthIndex) => {
+              return (
+                <div key={month} className="min-w-0 border rounded overflow-hidden">
+                  <div className="bg-muted/50 border-b p-1 text-center font-semibold text-xs">
+                    {month}
+                  </div>
+                  <div className="divide-y">
+                    {operaciones.length === 0 ? (
+                      <div className="p-1 text-center text-muted-foreground text-xs">
+                        -
+                      </div>
+                    ) : (
+                      operaciones.map((operacion) => {
                         const audit = getAuditForCell(operacion, monthIndex)
                         const allAudits = getAllAuditsForCell(operacion, monthIndex)
                         
                         if (!audit) {
                           return (
-                            <td
-                              key={monthIndex}
-                              className="border p-2 text-center text-muted-foreground"
+                            <div
+                              key={operacion}
+                              className="p-1 text-center text-muted-foreground text-xs"
                             >
-                              -
-                            </td>
+                              <div className="font-medium text-[10px] mb-0.5 truncate" title={operacion}>{operacion}</div>
+                              <div className="text-[10px]">-</div>
+                            </div>
                           )
                         }
 
                         const porcentaje = getCumplimientoPct(audit.headers)
                         if (porcentaje === null) {
                           return (
-                            <td
-                              key={monthIndex}
-                              className="border p-2 text-center text-muted-foreground"
+                            <div
+                              key={operacion}
+                              className="p-1 text-center text-muted-foreground text-xs"
                             >
-                              -
-                            </td>
+                              <div className="font-medium text-[10px] mb-0.5 truncate" title={operacion}>{operacion}</div>
+                              <div className="text-[10px]">-</div>
+                            </div>
                           )
                         }
+                        
                         const colorClass = getCumplimientoColor(porcentaje)
                         const responsable = audit.headers.responsable_operacion
                           ? String(audit.headers.responsable_operacion)
@@ -526,40 +516,43 @@ export function AuditCalendar({ auditFiles }: AuditCalendarProps) {
                           : null
 
                         return (
-                          <td
-                            key={monthIndex}
+                          <div
+                            key={operacion}
                             className={cn(
-                              "border p-2 text-center cursor-pointer transition-all hover:shadow-md",
+                              "p-1 text-center cursor-pointer transition-all hover:shadow-sm",
                               colorClass
                             )}
                             onClick={() => handleCellClick(audit)}
                           >
-                            <div className="font-bold text-base mb-1">
+                            <div className="font-medium text-[10px] mb-0.5 truncate" title={operacion}>
+                              {operacion}
+                            </div>
+                            <div className="font-bold text-xs mb-0.5">
                               {porcentaje.toFixed(0)}%
                             </div>
                             {responsable && (
-                              <div className="text-xs opacity-80">
+                              <div className="text-[10px] opacity-80 truncate">
                                 R: {responsable}
                               </div>
                             )}
                             {auditor && (
-                              <div className="text-xs opacity-80">
+                              <div className="text-[10px] opacity-80 truncate">
                                 A: {auditor}
                               </div>
                             )}
                             {allAudits.length > 1 && (
-                              <div className="text-xs mt-1 opacity-60">
-                                +{allAudits.length - 1} más
+                              <div className="text-[10px] mt-0.5 opacity-60">
+                                +{allAudits.length - 1}
                               </div>
                             )}
-                          </td>
+                          </div>
                         )
-                      })}
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+                      })
+                    )}
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </div>
 

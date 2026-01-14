@@ -728,7 +728,7 @@ export default function ProcessPage() {
         onMappingSelect={handleMappingSelect}
         title="Procesar múltiples archivos Excel"
       />
-      <div className="container mx-auto py-8 px-4 max-w-7xl flex-1">
+      <div className="w-full py-8 px-6 flex-1">
         <div className="space-y-6">
           <div>
             <p className="text-muted-foreground">

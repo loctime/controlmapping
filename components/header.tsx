@@ -66,7 +66,7 @@ export function Header({
               <FileSpreadsheet className="h-4 w-4" />
             </div>
             <div className="min-w-0">
-              <h1 className="text-sm font-semibold text-foreground leading-tight">Excel Mapper</h1>
+              <h1 className="text-sm font-semibold text-foreground leading-tight">ControlMapping</h1>
             </div>
           </div>
 

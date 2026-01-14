@@ -34,10 +34,10 @@ export default function Home() {
             {/* Título y subtítulo */}
             <div className="space-y-1 sm:space-y-2">
               <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-gray-900 dark:text-white tracking-tight">
-                Mapping
+                ControlMapping
               </h1>
               <h2 className="text-lg sm:text-xl md:text-2xl font-semibold text-green-700 dark:text-green-400">
-                Excel Mapper
+                Excel Mapping Tool
               </h2>
             </div>
 
@@ -93,7 +93,7 @@ export default function Home() {
                 Process
               </h1>
               <h2 className="text-lg sm:text-xl md:text-2xl font-semibold text-blue-700 dark:text-blue-400">
-                Excel Processor
+                ControlMapping
               </h2>
             </div>
 

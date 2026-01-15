@@ -323,54 +323,88 @@ function formatUbicacion(evento: VehiculoEvento): string {
 }
 
 /**
+ * Valida si un texto es "humano válido" (no IDs, no patentes, no códigos).
+ * Rechaza:
+ * - Solo números
+ * - Patentes (formato común: letras y números cortos)
+ * - IDs técnicos
+ * - Textos muy cortos sin contexto
+ */
+function esTextoHumanoValido(texto: string): boolean {
+  if (!texto || texto.trim() === "") return false
+  
+  const trimmed = texto.trim()
+  
+  // Rechazar si es muy corto (menos de 5 caracteres)
+  if (trimmed.length < 5) return false
+  
+  // Rechazar si es solo números
+  if (/^\d+$/.test(trimmed)) return false
+  
+  // Rechazar si parece patente (formato común: 3-4 letras seguidas de números, o viceversa)
+  if (/^[A-Z]{1,4}\d{1,4}$/i.test(trimmed) || /^\d{1,4}[A-Z]{1,4}$/i.test(trimmed)) return false
+  
+  // Rechazar si parece ID técnico (solo letras mayúsculas cortas o códigos)
+  if (/^[A-Z]{1,6}$/.test(trimmed) && trimmed.length <= 6) return false
+  
+  // Aceptar si tiene al menos una palabra con contexto (letras y espacios, o texto descriptivo)
+  return /[a-zA-Z]{3,}/.test(trimmed) && trimmed.length >= 5
+}
+
+/**
  * Obtiene la descripción legible del evento.
  * SOLO maneja eventos D1 (Fatiga) y D3 (Distracción) - los únicos eventos reales.
- * Formato: "Fatiga – [descripción]" o "Distracción – [descripción]"
+ * 
+ * REGLAS:
+ * - D1 → "Fatiga – Parpadeo pesado" (o descripción válida si existe)
+ * - D3 → "Distracción – Sin mirar al frente" (o descripción válida si existe)
+ * - NO usar valores de vehículo como descripción
+ * - Solo usar descripcion/texto si contiene texto humano válido (no IDs, no patentes)
  */
 function obtenerDescripcionEvento(evento: VehiculoEvento): string {
   const eventoCode = evento.evento?.trim()
   
   // Validar que sea un evento real (D1 o D3)
   if (eventoCode !== "D1" && eventoCode !== "D3") {
-    // Si no es D1/D3, intentar inferir desde descripción/texto, pero solo si menciona fatiga/distracción
-    const descripcionLower = (evento.descripcion || evento.texto || "").toLowerCase()
-    if (descripcionLower.includes("fatiga") || descripcionLower.includes("parpadeo")) {
-      const detalle = evento.descripcion?.trim() || evento.texto?.trim() || "Parpadeo pesado"
-      return `Fatiga – ${detalle}`
-    }
-    if (descripcionLower.includes("distracción") || descripcionLower.includes("distraccion") || descripcionLower.includes("mirar")) {
-      const detalle = evento.descripcion?.trim() || evento.texto?.trim() || "Sin mirar al frente"
-      return `Distracción – ${detalle}`
-    }
-    // Fallback solo si realmente no hay información: usar descripción/texto si existe
-    if (evento.descripcion && evento.descripcion.trim() !== "") {
-      return evento.descripcion.trim()
-    }
-    if (evento.texto && evento.texto.trim() !== "") {
-      return evento.texto.trim()
-    }
+    // Si no es D1/D3 válido, no debería llegar aquí en el flujo normal
+    // pero por seguridad, retornar descripción genérica
     return "Evento de seguridad vial"
   }
 
   // Evento D1 (Fatiga)
   if (eventoCode === "D1") {
-    const detalle = evento.descripcion?.trim() || evento.texto?.trim() || "Parpadeo pesado"
-    return `Fatiga – ${detalle}`
+    // Intentar usar descripción/texto solo si es texto humano válido
+    const descripcion = evento.descripcion?.trim() || evento.texto?.trim() || ""
+    if (descripcion && esTextoHumanoValido(descripcion)) {
+      return `Fatiga – ${descripcion}`
+    }
+    // Fallback: usar descripción estándar
+    return "Fatiga – Parpadeo pesado"
   }
 
   // Evento D3 (Distracción)
   if (eventoCode === "D3") {
-    const detalle = evento.descripcion?.trim() || evento.texto?.trim() || "Sin mirar al frente"
-    return `Distracción – ${detalle}`
+    // Intentar usar descripción/texto solo si es texto humano válido
+    const descripcion = evento.descripcion?.trim() || evento.texto?.trim() || ""
+    if (descripcion && esTextoHumanoValido(descripcion)) {
+      return `Distracción – ${descripcion}`
+    }
+    // Fallback: usar descripción estándar
+    return "Distracción – Sin mirar al frente"
   }
 
-  // No debería llegar aquí, pero por seguridad
+  // No debería llegar aquí
   return "Evento de seguridad vial"
 }
 
 /**
  * Analiza los eventos reales y genera texto de contexto preventivo
  * basado únicamente en eventos reales (D1/D3) y factores de severidad.
+ * 
+ * SEPARA CLARAMENTE:
+ * - Eventos reales (D1/D3): los únicos eventos que existen
+ * - Factores agravantes (velocidad, reincidencia, franja horaria): NO son eventos
+ * 
  * NO trata factores como eventos.
  */
 function generarContextoPreventivo(
@@ -383,35 +417,37 @@ function generarContextoPreventivo(
     return "No hay eventos registrados en el período analizado."
   }
 
-  const partes: string[] = []
   const distribution = countD1D3(eventos)
   const factors = computeFactors(eventos)
 
+  // Construir texto separando claramente eventos reales de factores agravantes
+  const partesEventos: string[] = []
+  const partesFactores: string[] = []
+
   // EVENTOS REALES: Solo D1 (Fatiga) y D3 (Distracción)
   if (distribution.d1 > 0) {
-    partes.push(`Fatiga (${distribution.d1} evento${distribution.d1 !== 1 ? "s" : ""})`)
+    partesEventos.push(`${distribution.d1} evento${distribution.d1 !== 1 ? "s" : ""} de Fatiga (D1)`)
   }
 
   if (distribution.d3 > 0) {
-    partes.push(`Distracción (${distribution.d3} evento${distribution.d3 !== 1 ? "s" : ""})`)
+    partesEventos.push(`${distribution.d3} evento${distribution.d3 !== 1 ? "s" : ""} de Distracción (D3)`)
   }
 
   // FACTORES DE SEVERIDAD (agravantes, NO son eventos): Solo mencionar si existen
   if (factors.altaVelocidad > 0) {
-    partes.push(`Eventos con velocidad ≥ 80 km/h: ${factors.altaVelocidad}`)
+    partesFactores.push(`${factors.altaVelocidad} evento${factors.altaVelocidad !== 1 ? "s" : ""} con velocidad ≥ 80 km/h`)
   }
 
   if (factors.reincidencia > 0) {
-    partes.push(`Reincidencia: ${factors.reincidencia} día${factors.reincidencia !== 1 ? "s" : ""} crítico${factors.reincidencia !== 1 ? "s" : ""}`)
+    partesFactores.push(`${factors.reincidencia} día${factors.reincidencia !== 1 ? "s" : ""} con reincidencia crítica`)
   }
 
   if (factors.franjaDominante) {
-    partes.push(`Franja horaria dominante: ${factors.franjaDominante}h (${factors.franjaCount} evento${factors.franjaCount !== 1 ? "s" : ""})`)
+    partesFactores.push(`Franja horaria dominante: ${factors.franjaDominante}h (${factors.franjaCount} evento${factors.franjaCount !== 1 ? "s" : ""})`)
   }
 
-  // Construir texto basado solo en datos reales
-  // Si no hay eventos D1/D3, el texto debe reflejar que no hay eventos críticos reales
-  if (partes.length === 0) {
+  // Construir texto estructurado
+  if (partesEventos.length === 0) {
     // Solo contar eventos D1/D3 reales
     const eventosReales = eventos.filter(
       (e) => e.evento?.trim() === "D1" || e.evento?.trim() === "D3"
@@ -422,8 +458,14 @@ function generarContextoPreventivo(
     return `Se registraron ${eventosReales.length} evento${eventosReales.length !== 1 ? "s" : ""} crítico${eventosReales.length !== 1 ? "s" : ""} en el período analizado.`
   }
 
-  let texto = "Los eventos registrados incluyen: "
-  texto += partes.join(", ") + "."
+  // Construir texto con separación clara
+  let texto = "Eventos críticos registrados: "
+  texto += partesEventos.join(" y ") + "."
+
+  if (partesFactores.length > 0) {
+    texto += " Factores agravantes detectados: "
+    texto += partesFactores.join(", ") + "."
+  }
 
   return texto
 }
@@ -472,7 +514,10 @@ export const SecurityAlertPdf: React.FC<SecurityAlertPdfProps> = ({
             <View>
               <Text style={styles.alertDetails}>
                 El conductor {eventoMasGrave.operador || "N/A"} registró el evento '{obtenerDescripcionEvento(eventoMasGrave)}' el {formatFecha(eventoMasGrave.fecha)} a las {formatHora(eventoMasGrave.fecha)},
-                conduciendo el vehículo {eventoMasGrave.vehiculo || "N/A"} a {eventoMasGrave.velocidad > 0 ? `${eventoMasGrave.velocidad}` : "N/A"} km/h.
+                conduciendo el vehículo {eventoMasGrave.vehiculo || "N/A"}.
+              </Text>
+              <Text style={styles.alertDetails}>
+                Velocidad registrada al momento del evento: {eventoMasGrave.velocidad > 0 ? `${eventoMasGrave.velocidad} km/h` : "N/A"}.
               </Text>
               <Text style={styles.alertDetails}>
                 Ubicación: {formatUbicacion(eventoMasGrave)}.
@@ -495,7 +540,7 @@ export const SecurityAlertPdf: React.FC<SecurityAlertPdfProps> = ({
               <Text style={styles.kpiLabel}>
                 Eventos críticos{"\n"}
                 <Text style={{ fontSize: 7, fontWeight: "normal" }}>
-                  (D1 + D3)
+                  = D1 (Fatiga) + D3 (Distracción)
                 </Text>
               </Text>
             </View>
@@ -510,7 +555,7 @@ export const SecurityAlertPdf: React.FC<SecurityAlertPdfProps> = ({
             {kpisEjecutivos.velocidadMaxima > 0 && (
               <View style={styles.kpiCard}>
                 <Text style={styles.kpiValue}>{kpisEjecutivos.velocidadMaxima} km/h</Text>
-                <Text style={styles.kpiLabel}>Velocidad máxima</Text>
+                <Text style={styles.kpiLabel}>Velocidad máxima{"\n"}registrada</Text>
               </View>
             )}
 
@@ -556,7 +601,7 @@ export const SecurityAlertPdf: React.FC<SecurityAlertPdfProps> = ({
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Velocidad:</Text>
                 <Text style={styles.detailValue}>
-                  {eventoMasGrave.velocidad > 0 ? `${eventoMasGrave.velocidad} km/h` : "N/A"}
+                  {eventoMasGrave.velocidad > 0 ? `${eventoMasGrave.velocidad} km/h (registrada al momento del evento)` : "N/A"}
                 </Text>
               </View>
               <View style={styles.detailRowLast}>

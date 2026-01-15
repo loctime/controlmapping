@@ -23,6 +23,8 @@ import { getDomain } from "@/domains/registry"
 import "@/domains/audit"
 import "@/domains/vehiculo"
 import type { AuditFile } from "@/domains/audit"
+import type { VehiculoEventosFile } from "@/domains/vehiculo/types"
+import { EventLogView } from "@/components/event-log/EventLogView"
 import { Loader2, ChevronDown, ChevronUp, FileSpreadsheet } from "lucide-react"
 import { normalizeDate } from "@/utils/date"
 
@@ -57,6 +59,7 @@ export default function ProcessPage() {
   const [files, setFiles] = useState<File[]>([])
   const [results, setResults] = useState<ProcessedResult[]>([])
   const [auditFiles, setAuditFiles] = useState<AuditFile[]>([])
+  const [vehiculoEventosFiles, setVehiculoEventosFiles] = useState<VehiculoEventosFile[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isUploadCollapsed, setIsUploadCollapsed] = useState(false)
@@ -147,17 +150,19 @@ export default function ProcessPage() {
 
   // Colapsar automáticamente cuando hay archivos procesados
   useEffect(() => {
-    if (auditFiles.length > 0 || results.length > 0) {
+    if (auditFiles.length > 0 || results.length > 0 || vehiculoEventosFiles.length > 0) {
       setIsUploadCollapsed(true)
     } else {
       setIsUploadCollapsed(false)
     }
-  }, [auditFiles.length, results.length])
+  }, [auditFiles.length, results.length, vehiculoEventosFiles.length])
 
   // Cargar schema template cuando se selecciona un mapping
   const handleMappingSelect = async (mapping: (SchemaInstance & { id: string; name: string }) | null) => {
     setSelectedMapping(mapping)
     setResults([])
+    setAuditFiles([])
+    setVehiculoEventosFiles([])
     setError(null)
     
     if (mapping) {
@@ -437,6 +442,7 @@ export default function ProcessPage() {
     setError(null)
     const processedResults: ProcessedResult[] = []
     const auditResults: AuditFile[] = []
+    const vehiculoEventosResults: VehiculoEventosFile[] = []
 
     // Obtener dominio desde registry (fallback a "audit" si no se especifica)
     const domain = getDomain(schemaTemplate?.type)
@@ -467,7 +473,6 @@ export default function ProcessPage() {
             const parsedResult = domain.parser(excelData, schemaTemplate, selectedMapping)
             
             // Type guard para verificar si es AuditFile (dominio de auditoría)
-            // Esto permite mantener la lógica específica de auditoría sin hardcodear el tipo
             const isAuditFile = (result: unknown): result is AuditFile => {
               return (
                 typeof result === "object" &&
@@ -481,10 +486,29 @@ export default function ProcessPage() {
               )
             }
             
-            if (!isAuditFile(parsedResult)) {
-              console.warn(`  ⚠ El parser del dominio "${domain.name}" no retornó un AuditFile. Continuando con procesamiento genérico.`)
-              // Continuar con el procesamiento genérico más abajo
-            } else {
+            // Type guard para verificar si es VehiculoEventosFile (dominio de eventos vehiculares)
+            const isVehiculoEventosFile = (result: unknown): result is VehiculoEventosFile => {
+              return (
+                typeof result === "object" &&
+                result !== null &&
+                "fileName" in result &&
+                "eventos" in result &&
+                "totalEventos" in result &&
+                "tiposEvento" in result &&
+                Array.isArray((result as any).eventos) &&
+                typeof (result as any).totalEventos === "number" &&
+                Array.isArray((result as any).tiposEvento)
+              )
+            }
+            
+            if (isVehiculoEventosFile(parsedResult)) {
+              // Es un archivo de eventos vehiculares
+              vehiculoEventosResults.push(parsedResult)
+              console.log(`  ✅ Archivo procesado como eventos vehiculares: ${file.name}`)
+              console.log(`    - Total eventos: ${parsedResult.totalEventos}`)
+              console.log(`    - Tipos de evento: ${parsedResult.tiposEvento.join(", ")}`)
+              continue
+            } else if (isAuditFile(parsedResult)) {
               const auditFile = parsedResult
               
               // Normalizar fecha a Date | null (requerido por AuditCalendar)
@@ -769,6 +793,7 @@ export default function ProcessPage() {
       
       setResults(processedResults)
       setAuditFiles(auditResults)
+      setVehiculoEventosFiles(vehiculoEventosResults)
     } catch (err) {
       console.error("❌ Error al procesar archivos:", err)
       setError(`Error al procesar archivos: ${err instanceof Error ? err.message : "Error desconocido"}`)
@@ -925,6 +950,7 @@ export default function ProcessPage() {
                   setSchemaTemplate(null)
                   setResults([])
                   setAuditFiles([])
+                  setVehiculoEventosFiles([])
                 }}
                 disabled={isLoadingSchemas}
               >
@@ -1014,7 +1040,7 @@ export default function ProcessPage() {
           <Collapsible open={!isUploadCollapsed} onOpenChange={(open) => setIsUploadCollapsed(!open)}>
             <Card className="overflow-hidden">
               {/* Barra compacta cuando está colapsado */}
-              {(auditFiles.length > 0 || results.length > 0) && (
+              {(auditFiles.length > 0 || results.length > 0 || vehiculoEventosFiles.length > 0) && (
                 <CollapsibleTrigger asChild>
                   <div className={`p-4 cursor-pointer hover:bg-muted/50 transition-colors ${isUploadCollapsed ? 'border-b' : 'hidden'}`}>
                     <div className="flex items-center justify-between">
@@ -1022,7 +1048,7 @@ export default function ProcessPage() {
                         <div className="flex items-center gap-2 text-muted-foreground">
                           <FileSpreadsheet className="h-5 w-5 shrink-0" />
                           <span className="text-sm font-medium">
-                            {(auditFiles.length > 0 ? auditFiles.length : results.length)} archivo{(auditFiles.length > 0 ? auditFiles.length : results.length) !== 1 ? "s" : ""} procesado{(auditFiles.length > 0 ? auditFiles.length : results.length) !== 1 ? "s" : ""}
+                            {(auditFiles.length > 0 ? auditFiles.length : vehiculoEventosFiles.length > 0 ? vehiculoEventosFiles.length : results.length)} archivo{(auditFiles.length > 0 ? auditFiles.length : vehiculoEventosFiles.length > 0 ? vehiculoEventosFiles.length : results.length) !== 1 ? "s" : ""} procesado{(auditFiles.length > 0 ? auditFiles.length : vehiculoEventosFiles.length > 0 ? vehiculoEventosFiles.length : results.length) !== 1 ? "s" : ""}
                           </span>
                         </div>
                         {selectedMapping && (
@@ -1050,6 +1076,7 @@ export default function ProcessPage() {
                             setFiles([])
                             setResults([])
                             setAuditFiles([])
+                            setVehiculoEventosFiles([])
                             setIsUploadCollapsed(false)
                           }}
                         >
@@ -1113,7 +1140,13 @@ export default function ProcessPage() {
             </Card>
           </Collapsible>
 
-        {results.length > 0 && (
+        {/* Vista de eventos vehiculares */}
+        {vehiculoEventosFiles.length > 0 && selectedSchemaId === "vehiculo_eventos_v1" && (
+          <EventLogView data={vehiculoEventosFiles} />
+        )}
+
+        {/* Vista de auditorías */}
+        {results.length > 0 && vehiculoEventosFiles.length === 0 && (
           <>
             {auditFiles.length > 0 && (
               <AuditCalendar 

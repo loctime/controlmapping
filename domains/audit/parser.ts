@@ -220,6 +220,9 @@ function convertToBoolean(value: string | number | boolean): boolean {
 /**
  * Determina el estado de un ítem basado en las columnas de estado
  * Prioridad: no_aplica > no_cumple > cumple_parcial > cumple
+ * 
+ * IMPORTANTE: Esta función solo se llama cuando hay al menos una marca.
+ * El estado se deriva exclusivamente de la columna marcada según la prioridad.
  */
 function determineItemState(
   cumple: boolean,
@@ -227,12 +230,14 @@ function determineItemState(
   no_cumple: boolean,
   no_aplica: boolean
 ): "cumple" | "cumple_parcial" | "no_cumple" | "no_aplica" {
+  // Prioridad: no_aplica > no_cumple > cumple_parcial > cumple
   if (no_aplica) return "no_aplica"
   if (no_cumple) return "no_cumple"
   if (cumple_parcial) return "cumple_parcial"
   if (cumple) return "cumple"
   
-  // Por defecto, si no hay ningún estado marcado, asumir "no_cumple"
+  // Este caso no debería ocurrir si se valida antes de llamar a esta función
+  // Pero por seguridad, retornar el estado más restrictivo
   return "no_cumple"
 }
 
@@ -398,7 +403,14 @@ export function parseAudit(
     const noCumple = convertToBoolean(noCumpleValues[row] ?? false)
     const noAplica = convertToBoolean(noAplicaValues[row] ?? false)
     
-    // Determinar el estado
+    // REGLA OBLIGATORIA: Solo crear item si hay al menos una marca en alguna columna de estado
+    const tieneMarca = cumple || cumpleParcial || noCumple || noAplica
+    if (!tieneMarca) {
+      // Ignorar filas donde todas las columnas de estado estén vacías
+      continue
+    }
+    
+    // Determinar el estado (solo se llama si hay al menos una marca)
     const estado = determineItemState(cumple, cumpleParcial, noCumple, noAplica)
     
     // Obtener observaciones

@@ -11,6 +11,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { TrendingUp, FileCheck, AlertTriangle, CheckCircle2, Info } from "lucide-react"
 import type { AuditFile } from "@/domains/audit"
 import { normalizeDate } from "@/utils/date"
+import { NonComplianceList } from "./NonComplianceList"
 
 interface AuditDashboardProps {
   auditFiles: AuditFile[]
@@ -741,6 +742,11 @@ export function AuditDashboard({ auditFiles }: AuditDashboardProps) {
     }
   }, [auditFiles])
 
+  // Combinar todos los items de todas las auditorías
+  const allItems = useMemo(() => {
+    return auditFiles.flatMap((file) => file.items)
+  }, [auditFiles])
+
   const chartConfig = {
     cumplimiento: {
       label: "% Cumplimiento",
@@ -889,6 +895,9 @@ export function AuditDashboard({ auditFiles }: AuditDashboardProps) {
           </p>
         </div>
       </Card>
+
+      {/* Incumplimientos detectados */}
+      <NonComplianceList items={allItems} />
 
       {/* Estadísticas Ejecutivas */}
       <div className="grid gap-6 md:grid-cols-2">

@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button"
 import { generateSecurityBanner } from "./securityAlerts"
 import { SecurityAlertBanner } from "./SecurityAlertBanner"
 import { VehiculoEventosPdfReport } from "./VehiculoEventosPdfReport"
+import { EventChartsSection } from "./EventChartsSection"
 
 interface EventLogViewProps {
   data: VehiculoEventosFile[]
@@ -82,6 +83,47 @@ export function EventLogView({ data }: EventLogViewProps) {
   const totalTipos = tiposEvento.length
   const eventosFiltradosCount = eventosFiltrados.length
 
+  // KPIs ejecutivos adicionales
+  const kpisEjecutivos = useMemo(() => {
+    // Eventos críticos (D1 o D3)
+    const eventosCriticos = allEventos.filter(
+      (e) => e.evento?.trim() === "D1" || e.evento?.trim() === "D3"
+    ).length
+
+    // Eventos de fatiga (D1)
+    const eventosFatiga = allEventos.filter(
+      (e) => e.evento?.trim() === "D1"
+    ).length
+
+    // Vehículos únicos
+    const vehiculosUnicos = new Set(
+      allEventos
+        .map((e) => e.vehiculo?.trim())
+        .filter((v) => v && v !== "")
+    ).size
+
+    // Operadores únicos
+    const operadoresUnicos = new Set(
+      allEventos
+        .map((e) => e.operador?.trim())
+        .filter((o) => o && o !== "")
+    ).size
+
+    // Velocidad máxima registrada
+    const velocidades = allEventos
+      .map((e) => e.velocidad)
+      .filter((v) => v > 0)
+    const velocidadMaxima = velocidades.length > 0 ? Math.max(...velocidades) : 0
+
+    return {
+      eventosCriticos,
+      eventosFatiga,
+      vehiculosUnicos,
+      operadoresUnicos,
+      velocidadMaxima,
+    }
+  }, [allEventos])
+
   // Verificar si hay filtros activos
   const filtrosActivos = filtroTipoEvento !== "all" || filtroOperador !== "all" || filtroVehiculo !== "all"
 
@@ -120,14 +162,15 @@ export function EventLogView({ data }: EventLogViewProps) {
 
   return (
     <div className="space-y-6">
-      {/* Botón de exportar PDF */}
-      <div className="flex justify-end">
-        <Button onClick={handleExportPdf} className="gap-2">
-          <FileDown className="h-4 w-4" />
-          Exportar PDF
-        </Button>
+      {/* Título del reporte */}
+      <div>
+        <h2 className="text-2xl font-bold">Reporte de Eventos Vehiculares</h2>
+        <p className="text-sm text-muted-foreground mt-1">
+          Análisis de telemetría y seguridad
+        </p>
       </div>
-      {/* Resumen superior */}
+
+      {/* KPIs básicos */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card className="p-4">
           <div className="space-y-1">
@@ -165,8 +208,58 @@ export function EventLogView({ data }: EventLogViewProps) {
         </Card>
       </div>
 
+      {/* KPIs ejecutivos adicionales */}
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+        <Card className="p-4">
+          <div className="space-y-1">
+            <p className="text-sm font-medium text-muted-foreground">Eventos críticos</p>
+            <p className="text-2xl font-bold">{kpisEjecutivos.eventosCriticos.toLocaleString()}</p>
+            <p className="text-xs text-muted-foreground">D1 o D3</p>
+          </div>
+        </Card>
+
+        <Card className="p-4">
+          <div className="space-y-1">
+            <p className="text-sm font-medium text-muted-foreground">Eventos de fatiga</p>
+            <p className="text-2xl font-bold">{kpisEjecutivos.eventosFatiga.toLocaleString()}</p>
+            <p className="text-xs text-muted-foreground">Tipo D1</p>
+          </div>
+        </Card>
+
+        <Card className="p-4">
+          <div className="space-y-1">
+            <p className="text-sm font-medium text-muted-foreground">Vehículos únicos</p>
+            <p className="text-2xl font-bold">{kpisEjecutivos.vehiculosUnicos.toLocaleString()}</p>
+            <p className="text-xs text-muted-foreground">Total distintos</p>
+          </div>
+        </Card>
+
+        <Card className="p-4">
+          <div className="space-y-1">
+            <p className="text-sm font-medium text-muted-foreground">Operadores únicos</p>
+            <p className="text-2xl font-bold">{kpisEjecutivos.operadoresUnicos.toLocaleString()}</p>
+            <p className="text-xs text-muted-foreground">Total distintos</p>
+          </div>
+        </Card>
+
+        <Card className="p-4">
+          <div className="space-y-1">
+            <p className="text-sm font-medium text-muted-foreground">Velocidad máxima</p>
+            <p className="text-2xl font-bold">
+              {kpisEjecutivos.velocidadMaxima > 0
+                ? `${kpisEjecutivos.velocidadMaxima.toLocaleString()} km/h`
+                : "-"}
+            </p>
+            <p className="text-xs text-muted-foreground">Registrada</p>
+          </div>
+        </Card>
+      </div>
+
       {/* Banner de alerta de seguridad */}
       <SecurityAlertBanner alert={securityAlert} />
+
+      {/* Sección de gráficos */}
+      <EventChartsSection eventos={allEventos} />
 
       {/* Filtros */}
       <Card className="p-4">
@@ -284,6 +377,14 @@ export function EventLogView({ data }: EventLogViewProps) {
           </ScrollArea>
         </div>
       </Card>
+
+      {/* Botón de exportar PDF */}
+      <div className="flex justify-end">
+        <Button onClick={handleExportPdf} className="gap-2">
+          <FileDown className="h-4 w-4" />
+          Exportar PDF
+        </Button>
+      </div>
     </div>
   )
 }

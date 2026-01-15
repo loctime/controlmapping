@@ -64,7 +64,10 @@ export default function ProcessPage() {
   const [error, setError] = useState<string | null>(null)
   const [isUploadCollapsed, setIsUploadCollapsed] = useState(false)
   
-  // Estados para tabs y selecciones
+  // Estados para tabs principales (Procesar / Reporte)
+  const [mainTab, setMainTab] = useState<"procesar" | "reporte">("procesar")
+  
+  // Estados para tabs y selecciones de auditorías
   const [activeTab, setActiveTab] = useState<"general" | "operation" | "operator">("general")
   const [selectedOperationId, setSelectedOperationId] = useState<string>("")
   const [selectedOperatorId, setSelectedOperatorId] = useState<string>("")
@@ -1024,287 +1027,329 @@ export default function ProcessPage() {
         </div>
       </header>
       <div className="w-full py-8 px-6 flex-1">
-        <div className="space-y-6">
-          <div>
-            <p className="text-muted-foreground">
-              Aplicá un mapeo guardado a múltiples archivos Excel y generá un reporte consolidado
-            </p>
-          </div>
+        {/* Tabs principales: Procesar / Reporte */}
+        <Tabs value={mainTab} onValueChange={(value) => setMainTab(value as "procesar" | "reporte")} className="w-full">
+          <TabsList className="grid w-full max-w-md grid-cols-2 mb-6">
+            <TabsTrigger value="procesar">Procesar</TabsTrigger>
+            <TabsTrigger value="reporte">Reporte</TabsTrigger>
+          </TabsList>
 
-          {error && (
-            <Card className="p-4 border-destructive bg-destructive/10">
-              <p className="text-sm text-destructive">{error}</p>
-            </Card>
-          )}
+          {/* Tab: Procesar */}
+          <TabsContent value="procesar" className="space-y-6">
+            <div>
+              <p className="text-muted-foreground">
+                Aplicá un mapeo guardado a múltiples archivos Excel y generá un reporte consolidado
+              </p>
+            </div>
 
-          <Collapsible open={!isUploadCollapsed} onOpenChange={(open) => setIsUploadCollapsed(!open)}>
-            <Card className="overflow-hidden">
-              {/* Barra compacta cuando está colapsado */}
-              {(auditFiles.length > 0 || results.length > 0 || vehiculoEventosFiles.length > 0) && (
-                <CollapsibleTrigger asChild>
-                  <div className={`p-4 cursor-pointer hover:bg-muted/50 transition-colors ${isUploadCollapsed ? 'border-b' : 'hidden'}`}>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4 flex-1 min-w-0">
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                          <FileSpreadsheet className="h-5 w-5 shrink-0" />
-                          <span className="text-sm font-medium">
-                            {(auditFiles.length > 0 ? auditFiles.length : vehiculoEventosFiles.length > 0 ? vehiculoEventosFiles.length : results.length)} archivo{(auditFiles.length > 0 ? auditFiles.length : vehiculoEventosFiles.length > 0 ? vehiculoEventosFiles.length : results.length) !== 1 ? "s" : ""} procesado{(auditFiles.length > 0 ? auditFiles.length : vehiculoEventosFiles.length > 0 ? vehiculoEventosFiles.length : results.length) !== 1 ? "s" : ""}
-                          </span>
-                        </div>
-                        {selectedMapping && (
-                          <div className="text-sm text-muted-foreground truncate">
-                            • Mapeo: <span className="font-medium text-foreground">{selectedMapping.name}</span>
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setIsUploadCollapsed(false)
-                          }}
-                        >
-                          Ver archivos
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setFiles([])
-                            setResults([])
-                            setAuditFiles([])
-                            setVehiculoEventosFiles([])
-                            setIsUploadCollapsed(false)
-                          }}
-                        >
-                          Reprocesar
-                        </Button>
-                        <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                      </div>
-                    </div>
-                  </div>
-                </CollapsibleTrigger>
-              )}
-
-              {/* Contenido completo cuando está expandido */}
-              <CollapsibleContent className="data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down overflow-hidden">
-                <div className="p-4 space-y-4">
-                  {!isUploadCollapsed && (
-                    <div className="flex items-center justify-between pb-2 border-b">
-                      <h3 className="text-lg font-semibold">Subir y procesar archivos</h3>
-                      <CollapsibleTrigger asChild>
-                        <Button variant="ghost" size="sm">
-                          <ChevronUp className="h-4 w-4 mr-2" />
-                          Colapsar
-                        </Button>
-                      </CollapsibleTrigger>
-                    </div>
-                  )}
-                  
-                  <MultiFileUpload 
-                    files={files} 
-                    onFilesChange={setFiles}
-                    disabled={!selectedSchemaId || !selectedMapping}
-                  />
-
-                  <Card className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-medium text-foreground">Procesar archivos</p>
-                        <p className="text-sm text-muted-foreground">
-                          {files.length} archivo{files.length !== 1 ? "s" : ""} seleccionado{files.length !== 1 ? "s" : ""}
-                          {selectedMapping && ` • Mapeo: ${selectedMapping.name}`}
-                        </p>
-                      </div>
-                      <Button 
-                        onClick={processFiles} 
-                        disabled={!canProcess}
-                        title={!selectedSchemaId ? "Seleccioná un schema primero" : !selectedMapping ? "Seleccioná un mapeo primero" : files.length === 0 ? "Seleccioná al menos un archivo" : ""}
-                      >
-                        {isProcessing ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Procesando...
-                          </>
-                        ) : (
-                          "Procesar archivos"
-                        )}
-                      </Button>
-                    </div>
-                  </Card>
-                </div>
-              </CollapsibleContent>
-            </Card>
-          </Collapsible>
-
-        {/* Vista de eventos vehiculares */}
-        {vehiculoEventosFiles.length > 0 && selectedSchemaId === "vehiculo_eventos_v1" && (
-          <EventLogView data={vehiculoEventosFiles} />
-        )}
-
-        {/* Vista de auditorías */}
-        {results.length > 0 && vehiculoEventosFiles.length === 0 && (
-          <>
-            {auditFiles.length > 0 && (
-              <AuditCalendar 
-                auditFiles={auditFiles.map((af) => {
-                  // Validación defensiva final antes de pasar a AuditCalendar
-                  // Asegurar que fecha sea Date | null
-                  if (af.headers.fecha !== null && !(af.headers.fecha instanceof Date)) {
-                    console.warn(`⚠️ AuditCalendar: Normalizando fecha inválida para ${af.fileName}`)
-                    return {
-                      ...af,
-                      headers: {
-                        ...af.headers,
-                        fecha: normalizeHeaderDate(af.headers.fecha as string | number | Date | null | undefined),
-                      },
-                    }
-                  }
-                  return af
-                })} 
-              />
+            {error && (
+              <Card className="p-4 border-destructive bg-destructive/10">
+                <p className="text-sm text-destructive">{error}</p>
+              </Card>
             )}
-            
-            {/* Tabs para navegar entre vistas */}
-            <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-              <TabsList className="grid w-full max-w-md grid-cols-3">
-                <TabsTrigger value="general">General</TabsTrigger>
-                <TabsTrigger value="operation">Por Operación</TabsTrigger>
-                <TabsTrigger value="operator">Por Operario</TabsTrigger>
-              </TabsList>
 
-              {/* Vista General */}
-              <TabsContent value="general" className="mt-6">
-                {auditFiles.length > 0 ? (
-                  <AuditDashboard auditFiles={auditFiles} />
-                ) : (
-                  <DashboardGeneral results={results} />
-                )}
-                <ResultTable auditResults={allAuditFilesForTable} />
-              </TabsContent>
-
-              {/* Vista Por Operación */}
-              <TabsContent value="operation" className="mt-6">
-                <Card className="p-6 mb-6">
-                  <div className="space-y-4">
-                    <div>
-                      <Label htmlFor="operation-select" className="text-base font-semibold">
-                        Seleccionar Operación
-                      </Label>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        Elegí una operación para ver su dashboard detallado
-                      </p>
+            <Collapsible open={!isUploadCollapsed} onOpenChange={(open) => setIsUploadCollapsed(!open)}>
+              <Card className="overflow-hidden">
+                {/* Barra compacta cuando está colapsado */}
+                {(auditFiles.length > 0 || results.length > 0 || vehiculoEventosFiles.length > 0) && (
+                  <CollapsibleTrigger asChild>
+                    <div className={`p-4 cursor-pointer hover:bg-muted/50 transition-colors ${isUploadCollapsed ? 'border-b' : 'hidden'}`}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4 flex-1 min-w-0">
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <FileSpreadsheet className="h-5 w-5 shrink-0" />
+                            <span className="text-sm font-medium">
+                              {(auditFiles.length > 0 ? auditFiles.length : vehiculoEventosFiles.length > 0 ? vehiculoEventosFiles.length : results.length)} archivo{(auditFiles.length > 0 ? auditFiles.length : vehiculoEventosFiles.length > 0 ? vehiculoEventosFiles.length : results.length) !== 1 ? "s" : ""} procesado{(auditFiles.length > 0 ? auditFiles.length : vehiculoEventosFiles.length > 0 ? vehiculoEventosFiles.length : results.length) !== 1 ? "s" : ""}
+                            </span>
+                          </div>
+                          {selectedMapping && (
+                            <div className="text-sm text-muted-foreground truncate">
+                              • Mapeo: <span className="font-medium text-foreground">{selectedMapping.name}</span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setIsUploadCollapsed(false)
+                            }}
+                          >
+                            Ver archivos
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setFiles([])
+                              setResults([])
+                              setAuditFiles([])
+                              setVehiculoEventosFiles([])
+                              setIsUploadCollapsed(false)
+                            }}
+                          >
+                            Reprocesar
+                          </Button>
+                          <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                        </div>
+                      </div>
                     </div>
-                    <Select
-                      value={selectedOperationId}
-                      onValueChange={setSelectedOperationId}
-                    >
-                      <SelectTrigger id="operation-select" className="w-full max-w-md">
-                        <SelectValue placeholder="Seleccionar operación..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {availableOperations.length > 0 ? (
-                          availableOperations.map((operation) => (
-                            <SelectItem key={operation} value={operation}>
-                              {operation}
-                            </SelectItem>
-                          ))
-                        ) : (
-                          <SelectItem value="none" disabled>
-                            No hay operaciones disponibles
-                          </SelectItem>
-                        )}
-                      </SelectContent>
-                    </Select>
+                  </CollapsibleTrigger>
+                )}
+
+                {/* Contenido completo cuando está expandido */}
+                <CollapsibleContent className="data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down overflow-hidden">
+                  <div className="p-4 space-y-4">
+                    {!isUploadCollapsed && (
+                      <div className="flex items-center justify-between pb-2 border-b">
+                        <h3 className="text-lg font-semibold">Subir y procesar archivos</h3>
+                        <CollapsibleTrigger asChild>
+                          <Button variant="ghost" size="sm">
+                            <ChevronUp className="h-4 w-4 mr-2" />
+                            Colapsar
+                          </Button>
+                        </CollapsibleTrigger>
+                      </div>
+                    )}
+                    
+                    <MultiFileUpload 
+                      files={files} 
+                      onFilesChange={setFiles}
+                      disabled={!selectedSchemaId || !selectedMapping}
+                    />
+
+                    <Card className="p-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-medium text-foreground">Procesar archivos</p>
+                          <p className="text-sm text-muted-foreground">
+                            {files.length} archivo{files.length !== 1 ? "s" : ""} seleccionado{files.length !== 1 ? "s" : ""}
+                            {selectedMapping && ` • Mapeo: ${selectedMapping.name}`}
+                          </p>
+                        </div>
+                        <Button 
+                          onClick={processFiles} 
+                          disabled={!canProcess}
+                          title={!selectedSchemaId ? "Seleccioná un schema primero" : !selectedMapping ? "Seleccioná un mapeo primero" : files.length === 0 ? "Seleccioná al menos un archivo" : ""}
+                        >
+                          {isProcessing ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Procesando...
+                            </>
+                          ) : (
+                            "Procesar archivos"
+                          )}
+                        </Button>
+                      </div>
+                    </Card>
                   </div>
-                </Card>
+                </CollapsibleContent>
+              </Card>
+            </Collapsible>
 
-                {selectedOperationId ? (
-                  <OperationDashboard
-                    auditFiles={auditFiles}
-                    operationId={selectedOperationId}
-                    hideNavigation={true}
-                  />
-                ) : (
-                  <Card className="p-12">
-                    <div className="text-center space-y-2">
-                      <p className="text-lg font-medium text-muted-foreground">
-                        Seleccioná una operación para ver su dashboard
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {availableOperations.length > 0
-                          ? `${availableOperations.length} operación${availableOperations.length !== 1 ? "es" : ""} disponible${availableOperations.length !== 1 ? "s" : ""}`
-                          : "No hay operaciones disponibles en los datos procesados"}
-                      </p>
-                    </div>
-                  </Card>
-                )}
-              </TabsContent>
-
-              {/* Vista Por Operario */}
-              <TabsContent value="operator" className="mt-6">
-                <Card className="p-6 mb-6">
-                  <div className="space-y-4">
-                    <div>
-                      <Label htmlFor="operator-select" className="text-base font-semibold">
-                        Seleccionar Operario
-                      </Label>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        Elegí un operario para ver su dashboard detallado
-                      </p>
-                    </div>
-                    <Select
-                      value={selectedOperatorId}
-                      onValueChange={setSelectedOperatorId}
-                    >
-                      <SelectTrigger id="operator-select" className="w-full max-w-md">
-                        <SelectValue placeholder="Seleccionar operario..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {availableOperators.length > 0 ? (
-                          availableOperators.map((operator) => (
-                            <SelectItem key={operator} value={operator}>
-                              {operator}
-                            </SelectItem>
-                          ))
-                        ) : (
-                          <SelectItem value="none" disabled>
-                            No hay operarios disponibles
-                          </SelectItem>
-                        )}
-                      </SelectContent>
-                    </Select>
+            {/* Botón "Ver reporte" después de procesar archivos vehiculares */}
+            {vehiculoEventosFiles.length > 0 && !isProcessing && (
+              <Card className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium text-foreground">Archivos procesados exitosamente</p>
+                    <p className="text-sm text-muted-foreground">
+                      {vehiculoEventosFiles.length} archivo{vehiculoEventosFiles.length !== 1 ? "s" : ""} de eventos vehiculares procesado{vehiculoEventosFiles.length !== 1 ? "s" : ""}
+                    </p>
                   </div>
-                </Card>
+                  <Button 
+                    onClick={() => setMainTab("reporte")}
+                    variant="default"
+                  >
+                    Ver reporte
+                  </Button>
+                </div>
+              </Card>
+            )}
 
-                {selectedOperatorId ? (
-                  <OperatorDashboard
-                    auditFiles={auditFiles}
-                    operatorId={selectedOperatorId}
-                    hideNavigation={true}
+            {/* Vista de auditorías (solo en tab Procesar) */}
+            {results.length > 0 && vehiculoEventosFiles.length === 0 && (
+              <>
+                {auditFiles.length > 0 && (
+                  <AuditCalendar 
+                    auditFiles={auditFiles.map((af) => {
+                      // Validación defensiva final antes de pasar a AuditCalendar
+                      // Asegurar que fecha sea Date | null
+                      if (af.headers.fecha !== null && !(af.headers.fecha instanceof Date)) {
+                        console.warn(`⚠️ AuditCalendar: Normalizando fecha inválida para ${af.fileName}`)
+                        return {
+                          ...af,
+                          headers: {
+                            ...af.headers,
+                            fecha: normalizeHeaderDate(af.headers.fecha as string | number | Date | null | undefined),
+                          },
+                        }
+                      }
+                      return af
+                    })} 
                   />
-                ) : (
-                  <Card className="p-12">
-                    <div className="text-center space-y-2">
-                      <p className="text-lg font-medium text-muted-foreground">
-                        Seleccioná un operario para ver su dashboard
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {availableOperators.length > 0
-                          ? `${availableOperators.length} operario${availableOperators.length !== 1 ? "s" : ""} disponible${availableOperators.length !== 1 ? "s" : ""}`
-                          : "No hay operarios disponibles en los datos procesados"}
-                      </p>
-                    </div>
-                  </Card>
                 )}
-              </TabsContent>
-            </Tabs>
-          </>
-        )}
-        </div>
+                
+                {/* Tabs para navegar entre vistas */}
+                <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
+                  <TabsList className="grid w-full max-w-md grid-cols-3">
+                    <TabsTrigger value="general">General</TabsTrigger>
+                    <TabsTrigger value="operation">Por Operación</TabsTrigger>
+                    <TabsTrigger value="operator">Por Operario</TabsTrigger>
+                  </TabsList>
+
+                  {/* Vista General */}
+                  <TabsContent value="general" className="mt-6">
+                    {auditFiles.length > 0 ? (
+                      <AuditDashboard auditFiles={auditFiles} />
+                    ) : (
+                      <DashboardGeneral results={results} />
+                    )}
+                    <ResultTable auditResults={allAuditFilesForTable} />
+                  </TabsContent>
+
+                  {/* Vista Por Operación */}
+                  <TabsContent value="operation" className="mt-6">
+                    <Card className="p-6 mb-6">
+                      <div className="space-y-4">
+                        <div>
+                          <Label htmlFor="operation-select" className="text-base font-semibold">
+                            Seleccionar Operación
+                          </Label>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            Elegí una operación para ver su dashboard detallado
+                          </p>
+                        </div>
+                        <Select
+                          value={selectedOperationId}
+                          onValueChange={setSelectedOperationId}
+                        >
+                          <SelectTrigger id="operation-select" className="w-full max-w-md">
+                            <SelectValue placeholder="Seleccionar operación..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {availableOperations.length > 0 ? (
+                              availableOperations.map((operation) => (
+                                <SelectItem key={operation} value={operation}>
+                                  {operation}
+                                </SelectItem>
+                              ))
+                            ) : (
+                              <SelectItem value="none" disabled>
+                                No hay operaciones disponibles
+                              </SelectItem>
+                            )}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </Card>
+
+                    {selectedOperationId ? (
+                      <OperationDashboard
+                        auditFiles={auditFiles}
+                        operationId={selectedOperationId}
+                        hideNavigation={true}
+                      />
+                    ) : (
+                      <Card className="p-12">
+                        <div className="text-center space-y-2">
+                          <p className="text-lg font-medium text-muted-foreground">
+                            Seleccioná una operación para ver su dashboard
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            {availableOperations.length > 0
+                              ? `${availableOperations.length} operación${availableOperations.length !== 1 ? "es" : ""} disponible${availableOperations.length !== 1 ? "s" : ""}`
+                              : "No hay operaciones disponibles en los datos procesados"}
+                          </p>
+                        </div>
+                      </Card>
+                    )}
+                  </TabsContent>
+
+                  {/* Vista Por Operario */}
+                  <TabsContent value="operator" className="mt-6">
+                    <Card className="p-6 mb-6">
+                      <div className="space-y-4">
+                        <div>
+                          <Label htmlFor="operator-select" className="text-base font-semibold">
+                            Seleccionar Operario
+                          </Label>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            Elegí un operario para ver su dashboard detallado
+                          </p>
+                        </div>
+                        <Select
+                          value={selectedOperatorId}
+                          onValueChange={setSelectedOperatorId}
+                        >
+                          <SelectTrigger id="operator-select" className="w-full max-w-md">
+                            <SelectValue placeholder="Seleccionar operario..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {availableOperators.length > 0 ? (
+                              availableOperators.map((operator) => (
+                                <SelectItem key={operator} value={operator}>
+                                  {operator}
+                                </SelectItem>
+                              ))
+                            ) : (
+                              <SelectItem value="none" disabled>
+                                No hay operarios disponibles
+                              </SelectItem>
+                            )}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </Card>
+
+                    {selectedOperatorId ? (
+                      <OperatorDashboard
+                        auditFiles={auditFiles}
+                        operatorId={selectedOperatorId}
+                        hideNavigation={true}
+                      />
+                    ) : (
+                      <Card className="p-12">
+                        <div className="text-center space-y-2">
+                          <p className="text-lg font-medium text-muted-foreground">
+                            Seleccioná un operario para ver su dashboard
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            {availableOperators.length > 0
+                              ? `${availableOperators.length} operario${availableOperators.length !== 1 ? "s" : ""} disponible${availableOperators.length !== 1 ? "s" : ""}`
+                              : "No hay operarios disponibles en los datos procesados"}
+                          </p>
+                        </div>
+                      </Card>
+                    )}
+                  </TabsContent>
+                </Tabs>
+              </>
+            )}
+          </TabsContent>
+
+          {/* Tab: Reporte */}
+          <TabsContent value="reporte" className="space-y-6">
+            {vehiculoEventosFiles.length > 0 ? (
+              <EventLogView data={vehiculoEventosFiles} />
+            ) : (
+              <Card className="p-12">
+                <div className="text-center space-y-4">
+                  <p className="text-lg font-medium text-muted-foreground">
+                    No hay archivos procesados todavía
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Procesá al menos un Excel para ver el reporte.
+                  </p>
+                </div>
+              </Card>
+            )}
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   )

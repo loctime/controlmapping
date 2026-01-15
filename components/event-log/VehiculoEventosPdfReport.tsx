@@ -223,6 +223,39 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
     file.tiposEvento.forEach((tipo) => tiposEvento.add(tipo))
   })
 
+  // Calcular KPIs ejecutivos (mismos que en la UI)
+  const allEventos = data.flatMap((file) => file.eventos)
+  
+  // Eventos críticos (D1 o D3)
+  const eventosCriticos = allEventos.filter(
+    (e) => e.evento?.trim() === "D1" || e.evento?.trim() === "D3"
+  ).length
+
+  // Eventos de fatiga (D1)
+  const eventosFatiga = allEventos.filter(
+    (e) => e.evento?.trim() === "D1"
+  ).length
+
+  // Vehículos únicos
+  const vehiculosUnicos = new Set(
+    allEventos
+      .map((e) => e.vehiculo?.trim())
+      .filter((v) => v && v !== "")
+  ).size
+
+  // Operadores únicos
+  const operadoresUnicos = new Set(
+    allEventos
+      .map((e) => e.operador?.trim())
+      .filter((o) => o && o !== "")
+  ).size
+
+  // Velocidad máxima registrada
+  const velocidades = allEventos
+    .map((e) => e.velocidad)
+    .filter((v) => v > 0)
+  const velocidadMaxima = velocidades.length > 0 ? Math.max(...velocidades) : 0
+
   const alertStyles = getAlertStyles(securityAlert.severity)
 
   return (
@@ -267,6 +300,67 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
           <Text style={styles.text}>
             Las alertas de seguridad se generan automáticamente basándose en reglas de prevención
             de riesgos. Se recomienda revisar y tomar acciones preventivas según la severidad indicada.
+          </Text>
+        </View>
+
+        <Text style={styles.pageNumber} render={({ pageNumber }) => `Página ${pageNumber}`} fixed />
+      </Page>
+
+      {/* Análisis de Eventos */}
+      <Page size="A4" style={styles.page}>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>ANÁLISIS DE EVENTOS</Text>
+
+          <Text style={styles.subsectionTitle}>Resumen Ejecutivo</Text>
+          <Text style={styles.text}>
+            El análisis de eventos vehiculares muestra un total de {totalEventos.toLocaleString()} eventos
+            registrados en {data.length} archivo{data.length !== 1 ? "s" : ""} procesado{data.length !== 1 ? "s" : ""}.
+            De estos eventos, {eventosCriticos.toLocaleString()} son considerados críticos (eventos tipo D1 o D3),
+            incluyendo {eventosFatiga.toLocaleString()} eventos de fatiga (tipo D1).
+          </Text>
+
+          <Text style={styles.text}>
+            El análisis abarca {vehiculosUnicos.toLocaleString()} vehículo{vehiculosUnicos !== 1 ? "s" : ""} único{vehiculosUnicos !== 1 ? "s" : ""} y{" "}
+            {operadoresUnicos.toLocaleString()} operador{operadoresUnicos !== 1 ? "es" : ""} único{operadoresUnicos !== 1 ? "s" : ""}.
+            {velocidadMaxima > 0 && (
+              <> La velocidad máxima registrada fue de {velocidadMaxima.toLocaleString()} km/h.</>
+            )}
+          </Text>
+
+          <Text style={styles.subsectionTitle}>Indicadores Ejecutivos</Text>
+          <View style={styles.kpiGrid}>
+            <View style={styles.kpiCard}>
+              <Text style={styles.kpiLabel}>Eventos Críticos</Text>
+              <Text style={styles.kpiValue}>{eventosCriticos.toLocaleString()}</Text>
+              <Text style={[styles.kpiLabel, { fontSize: 9, marginTop: 3 }]}>D1 o D3</Text>
+            </View>
+            <View style={styles.kpiCard}>
+              <Text style={styles.kpiLabel}>Eventos de Fatiga</Text>
+              <Text style={styles.kpiValue}>{eventosFatiga.toLocaleString()}</Text>
+              <Text style={[styles.kpiLabel, { fontSize: 9, marginTop: 3 }]}>Tipo D1</Text>
+            </View>
+            <View style={styles.kpiCard}>
+              <Text style={styles.kpiLabel}>Vehículos Únicos</Text>
+              <Text style={styles.kpiValue}>{vehiculosUnicos.toLocaleString()}</Text>
+              <Text style={[styles.kpiLabel, { fontSize: 9, marginTop: 3 }]}>Total distintos</Text>
+            </View>
+            <View style={styles.kpiCard}>
+              <Text style={styles.kpiLabel}>Operadores Únicos</Text>
+              <Text style={styles.kpiValue}>{operadoresUnicos.toLocaleString()}</Text>
+              <Text style={[styles.kpiLabel, { fontSize: 9, marginTop: 3 }]}>Total distintos</Text>
+            </View>
+            {velocidadMaxima > 0 && (
+              <View style={styles.kpiCard}>
+                <Text style={styles.kpiLabel}>Velocidad Máxima</Text>
+                <Text style={styles.kpiValue}>{velocidadMaxima.toLocaleString()}</Text>
+                <Text style={[styles.kpiLabel, { fontSize: 9, marginTop: 3 }]}>km/h</Text>
+              </View>
+            )}
+          </View>
+
+          <Text style={styles.text}>
+            Estos indicadores proporcionan una visión general del estado de seguridad vehicular
+            y permiten identificar áreas que requieren atención inmediata o seguimiento continuo.
           </Text>
         </View>
 

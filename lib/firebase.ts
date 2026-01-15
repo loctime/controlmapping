@@ -148,4 +148,29 @@ export async function getSchemaTemplate(schemaId: string): Promise<SchemaTemplat
   }
 }
 
+/**
+ * Obtiene todos los SchemaTemplates disponibles
+ */
+export async function getSchemaTemplates(): Promise<SchemaTemplate[]> {
+  try {
+    const col = collection(db, 'schemaTemplates')
+    const snap = await getDocs(col)
+    return snap.docs.map((d) => {
+      const data = d.data()
+      return {
+        schemaId: data.schemaId,
+        name: data.name,
+        description: data.description,
+        version: data.version,
+        type: data.type,
+        headerFields: data.headerFields || [],
+        table: data.table || { columns: [] },
+      } as SchemaTemplate
+    })
+  } catch (err) {
+    console.error('getSchemaTemplates error', err)
+    return []
+  }
+}
+
 export default db

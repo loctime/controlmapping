@@ -9,9 +9,12 @@ import { FloatingMappingPanel } from "@/components/flotante-mapping-panel"
 import { Header } from "@/components/header"
 import { MultiFileUpload } from "@/components/multi-file-upload"
 import { ResultTable } from "@/components/result-table"
-import { saveSchemaTemplate } from "@/lib/firebase"
+import { saveSchemaTemplate, getSchemaTemplates, getSchemaTemplate } from "@/lib/firebase"
 import { parseAudit, type AuditFile } from "@/domains/audit"
 import type { CellMapping, ExcelData, SchemaTemplate, SchemaInstance, SchemaFieldMapping } from "@/types/excel"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Label } from "@/components/ui/label"
+import { Card } from "@/components/ui/card"
 
 // Schema Template de Auditoría
 const AUDIT_SCHEMA_TEMPLATE: SchemaTemplate = {
@@ -170,8 +173,12 @@ export default function MappingPage() {
   const [zoom, setZoom] = useState(100)
   const [isMappingPanelOpen, setIsMappingPanelOpen] = useState(false)
   
-  // Schema template y mapeos
-  const [schemaTemplate] = useState<SchemaTemplate>(AUDIT_SCHEMA_TEMPLATE)
+  // Schema selection
+  const [availableSchemas, setAvailableSchemas] = useState<SchemaTemplate[]>([])
+  const [selectedSchemaId, setSelectedSchemaId] = useState<string | null>(null)
+  const [schemaTemplate, setSchemaTemplate] = useState<SchemaTemplate | null>(null)
+  const [isLoadingSchemas, setIsLoadingSchemas] = useState(true)
+  
   const [headerMappings, setHeaderMappings] = useState<SchemaFieldMapping[]>([])
   const [tableMappings, setTableMappings] = useState<SchemaFieldMapping[]>([])
   const [currentHeaderFieldIndex, setCurrentHeaderFieldIndex] = useState(0)
@@ -184,12 +191,70 @@ export default function MappingPage() {
   const [isProcessingAudits, setIsProcessingAudits] = useState(false)
   const [showAuditResults, setShowAuditResults] = useState(false)
 
-  // Guardar el SchemaTemplate en Firestore al montar el componente
+  // Cargar schemas disponibles al montar
   useEffect(() => {
-    saveSchemaTemplate(AUDIT_SCHEMA_TEMPLATE).catch((err) => {
-      console.error("Error al guardar SchemaTemplate:", err)
-    })
+    const loadSchemas = async () => {
+      setIsLoadingSchemas(true)
+      try {
+        // Guardar schemas conocidos primero (para asegurar que estén disponibles)
+        await saveSchemaTemplate(AUDIT_SCHEMA_TEMPLATE).catch((err) => {
+          console.error("Error al guardar SchemaTemplate de auditoría:", err)
+        })
+        
+        // Importar y guardar schema de vehículos
+        const { VEHICULO_EVENTOS_V1_SCHEMA } = await import("@/domains/vehiculo/config")
+        await saveSchemaTemplate(VEHICULO_EVENTOS_V1_SCHEMA).catch((err) => {
+          console.error("Error al guardar SchemaTemplate de vehículos:", err)
+        })
+        
+        // Cargar todos los schemas disponibles
+        const schemas = await getSchemaTemplates()
+        setAvailableSchemas(schemas)
+        
+        // Si hay schemas disponibles, seleccionar el primero por defecto
+        if (schemas.length > 0 && !selectedSchemaId) {
+          setSelectedSchemaId(schemas[0].schemaId)
+        }
+      } catch (error) {
+        console.error("Error al cargar schemas:", error)
+      } finally {
+        setIsLoadingSchemas(false)
+      }
+    }
+    
+    loadSchemas()
   }, [])
+
+  // Cargar schema template cuando se selecciona un schema
+  useEffect(() => {
+    const loadSchemaTemplate = async () => {
+      if (!selectedSchemaId) {
+        setSchemaTemplate(null)
+        return
+      }
+      
+      try {
+        const template = await getSchemaTemplate(selectedSchemaId)
+        if (template) {
+          setSchemaTemplate(template)
+          // Resetear mapeos cuando cambia el schema
+          setHeaderMappings([])
+          setTableMappings([])
+          setCurrentHeaderFieldIndex(0)
+          setCurrentTableFieldIndex(0)
+          setExcelData(null) // Limpiar Excel cuando cambia el schema
+        } else {
+          console.error(`No se encontró el schema template para ${selectedSchemaId}`)
+          setSchemaTemplate(null)
+        }
+      } catch (error) {
+        console.error("Error al cargar schema template:", error)
+        setSchemaTemplate(null)
+      }
+    }
+    
+    loadSchemaTemplate()
+  }, [selectedSchemaId])
 
   const handleFileUpload = async (file: File) => {
     setIsLoading(true)
@@ -671,8 +736,73 @@ export default function MappingPage() {
 
       <div className="flex-1 flex flex-col overflow-hidden">
         {!excelData ? (
-          <div className="flex-1 flex items-center justify-center p-8">
-            <FileUploadZone onFileSelect={handleFileUpload} isLoading={isLoading} />
+          <div className="flex-1 flex flex-col items-center justify-center p-8 space-y-6">
+            {/* Selector de Schema */}
+            <Card className="p-6 w-full max-w-md">
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="schema-select" className="text-base font-semibold">
+                    Schema
+                  </Label>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Seleccioná el schema que querés usar para mapear tu Excel
+                  </p>
+                </div>
+                <Select
+                  value={selectedSchemaId || ""}
+                  onValueChange={setSelectedSchemaId}
+                  disabled={isLoadingSchemas}
+                >
+                  <SelectTrigger id="schema-select" className="w-full">
+                    <SelectValue placeholder={isLoadingSchemas ? "Cargando schemas..." : "Seleccionar schema"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableSchemas.length === 0 && !isLoadingSchemas && (
+                      <SelectItem value="no-schemas" disabled>
+                        No hay schemas disponibles
+                      </SelectItem>
+                    )}
+                    {availableSchemas.map((schema) => (
+                      <SelectItem key={schema.schemaId} value={schema.schemaId}>
+                        {schema.name} ({schema.schemaId})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {selectedSchemaId && schemaTemplate && (
+                  <div className="text-sm text-muted-foreground space-y-1 pt-2 border-t">
+                    <p>
+                      <span className="font-medium">Descripción:</span> {schemaTemplate.description || "Sin descripción"}
+                    </p>
+                    <p>
+                      <span className="font-medium">Versión:</span> {schemaTemplate.version}
+                    </p>
+                    <p>
+                      <span className="font-medium">Tipo:</span> {schemaTemplate.type}
+                    </p>
+                  </div>
+                )}
+                {!selectedSchemaId && (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    Seleccioná un schema para comenzar
+                  </p>
+                )}
+              </div>
+            </Card>
+            
+            {/* Zona de carga de archivo - deshabilitada si no hay schema */}
+            <div className="w-full max-w-md">
+              <FileUploadZone 
+                onFileSelect={handleFileUpload} 
+                isLoading={isLoading}
+                disabled={!selectedSchemaId || !schemaTemplate}
+              />
+              {!selectedSchemaId && (
+                <p className="text-sm text-muted-foreground text-center mt-2">
+                  Seleccioná un schema para habilitar la carga de archivos
+                </p>
+              )}
+            </div>
           </div>
         ) : (
           <>
@@ -707,10 +837,11 @@ export default function MappingPage() {
                 </div>
                 
                 {/* Panel flotante de mapeo */}
-                <FloatingMappingPanel
-                  excelData={excelData}
-                  selectedCell={selectedCell}
-                  schemaTemplate={schemaTemplate}
+                {schemaTemplate && (
+                  <FloatingMappingPanel
+                    excelData={excelData}
+                    selectedCell={selectedCell}
+                    schemaTemplate={schemaTemplate}
                   headerMappings={headerMappings}
                   tableMappings={tableMappings}
                   currentHeaderFieldIndex={currentHeaderFieldIndex}
@@ -723,7 +854,8 @@ export default function MappingPage() {
                   onTableFieldMapped={handleTableFieldMapped}
                   onRemoveLastHeaderMapping={handleRemoveLastHeaderMapping}
                   onRemoveLastTableMapping={handleRemoveLastTableMapping}
-                />
+                  />
+                )}
                 
                 {/* Panel de procesamiento de auditorías */}
                 <div className="border-t border-border bg-card p-4">

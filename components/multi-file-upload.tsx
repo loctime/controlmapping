@@ -9,9 +9,10 @@ import { Label } from "@/components/ui/label"
 interface MultiFileUploadProps {
   files: File[]
   onFilesChange: (files: File[]) => void
+  disabled?: boolean
 }
 
-export function MultiFileUpload({ files, onFilesChange }: MultiFileUploadProps) {
+export function MultiFileUpload({ files, onFilesChange, disabled = false }: MultiFileUploadProps) {
   const [isDragging, setIsDragging] = useState(false)
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -28,6 +29,8 @@ export function MultiFileUpload({ files, onFilesChange }: MultiFileUploadProps) 
     (e: React.DragEvent) => {
       e.preventDefault()
       setIsDragging(false)
+      
+      if (disabled) return
 
       const droppedFiles = Array.from(e.dataTransfer.files).filter(
         (file) => file.name.endsWith(".xlsx") || file.name.endsWith(".xls")
@@ -37,7 +40,7 @@ export function MultiFileUpload({ files, onFilesChange }: MultiFileUploadProps) 
         onFilesChange([...files, ...droppedFiles])
       }
     },
-    [files, onFilesChange]
+    [files, onFilesChange, disabled]
   )
 
   const handleFileInput = useCallback(
@@ -82,7 +85,9 @@ export function MultiFileUpload({ files, onFilesChange }: MultiFileUploadProps) 
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
           className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
-            isDragging
+            disabled
+              ? "border-border bg-muted opacity-50 cursor-not-allowed"
+              : isDragging
               ? "border-primary bg-primary/5"
               : "border-border bg-muted/30 hover:bg-muted/50"
           }`}
@@ -98,11 +103,13 @@ export function MultiFileUpload({ files, onFilesChange }: MultiFileUploadProps) 
             onChange={handleFileInput}
             className="hidden"
             id="file-upload-input"
+            disabled={disabled}
           />
           <Button
             type="button"
             variant="outline"
             onClick={() => document.getElementById("file-upload-input")?.click()}
+            disabled={disabled}
           >
             Seleccionar archivos
           </Button>

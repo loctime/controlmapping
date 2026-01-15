@@ -10,9 +10,10 @@ import { Card } from "@/components/ui/card"
 interface FileUploadZoneProps {
   onFileSelect: (file: File) => void
   isLoading: boolean
+  disabled?: boolean
 }
 
-export function FileUploadZone({ onFileSelect, isLoading }: FileUploadZoneProps) {
+export function FileUploadZone({ onFileSelect, isLoading, disabled = false }: FileUploadZoneProps) {
   const [isDragging, setIsDragging] = useState(false)
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -58,7 +59,9 @@ export function FileUploadZone({ onFileSelect, isLoading }: FileUploadZoneProps)
           relative flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-12
           transition-all duration-200
           ${
-            isDragging
+            disabled
+              ? "border-border bg-muted opacity-50 cursor-not-allowed"
+              : isDragging
               ? "border-primary bg-primary/5"
               : "border-border bg-card hover:border-primary/50 hover:bg-accent/50"
           }
@@ -85,7 +88,12 @@ export function FileUploadZone({ onFileSelect, isLoading }: FileUploadZoneProps)
             </p>
 
             <div className="flex flex-col items-center gap-3">
-              <Button onClick={() => document.getElementById("file-input")?.click()} size="lg" className="gap-2">
+              <Button 
+                onClick={() => document.getElementById("file-input")?.click()} 
+                size="lg" 
+                className="gap-2"
+                disabled={disabled}
+              >
                 <Upload className="h-5 w-5" />
                 Seleccionar archivo
               </Button>
@@ -93,7 +101,14 @@ export function FileUploadZone({ onFileSelect, isLoading }: FileUploadZoneProps)
               <p className="text-xs text-muted-foreground">Formatos soportados: .xlsx, .xls</p>
             </div>
 
-            <input id="file-input" type="file" accept=".xlsx,.xls" onChange={handleFileInput} className="hidden" />
+            <input 
+              id="file-input" 
+              type="file" 
+              accept=".xlsx,.xls" 
+              onChange={handleFileInput} 
+              className="hidden" 
+              disabled={disabled}
+            />
           </>
         )}
       </div>

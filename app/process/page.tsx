@@ -16,7 +16,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
-import { getSchemaTemplate } from "@/lib/firebase"
+import { getSchemaTemplate, getSchemaTemplates, getMappings } from "@/lib/firebase"
 import type { SchemaInstance, SchemaTemplate, SchemaFieldMapping, ExcelData } from "@/types/excel"
 import { getDomain } from "@/domains/registry"
 // Importar dominios para que se registren automáticamente
@@ -43,8 +43,17 @@ interface ProcessedResult {
 }
 
 export default function ProcessPage() {
-  const [selectedMapping, setSelectedMapping] = useState<(SchemaInstance & { id: string; name: string }) | null>(null)
+  // Schema selection
+  const [availableSchemas, setAvailableSchemas] = useState<SchemaTemplate[]>([])
+  const [selectedSchemaId, setSelectedSchemaId] = useState<string | null>(null)
   const [schemaTemplate, setSchemaTemplate] = useState<SchemaTemplate | null>(null)
+  const [isLoadingSchemas, setIsLoadingSchemas] = useState(true)
+  
+  // Mapping selection (filtrado por schema)
+  const [availableMappings, setAvailableMappings] = useState<(SchemaInstance & { id: string; name: string })[]>([])
+  const [selectedMapping, setSelectedMapping] = useState<(SchemaInstance & { id: string; name: string }) | null>(null)
+  const [isLoadingMappings, setIsLoadingMappings] = useState(false)
+  
   const [files, setFiles] = useState<File[]>([])
   const [results, setResults] = useState<ProcessedResult[]>([])
   const [auditFiles, setAuditFiles] = useState<AuditFile[]>([])
@@ -56,6 +65,85 @@ export default function ProcessPage() {
   const [activeTab, setActiveTab] = useState<"general" | "operation" | "operator">("general")
   const [selectedOperationId, setSelectedOperationId] = useState<string>("")
   const [selectedOperatorId, setSelectedOperatorId] = useState<string>("")
+  
+  // Cargar schemas disponibles al montar
+  useEffect(() => {
+    const loadSchemas = async () => {
+      setIsLoadingSchemas(true)
+      try {
+        const schemas = await getSchemaTemplates()
+        setAvailableSchemas(schemas)
+        
+        // Si hay schemas disponibles, seleccionar el primero por defecto
+        if (schemas.length > 0 && !selectedSchemaId) {
+          setSelectedSchemaId(schemas[0].schemaId)
+        }
+      } catch (error) {
+        console.error("Error al cargar schemas:", error)
+      } finally {
+        setIsLoadingSchemas(false)
+      }
+    }
+    
+    loadSchemas()
+  }, [])
+  
+  // Cargar schema template cuando se selecciona un schema
+  useEffect(() => {
+    const loadSchemaTemplate = async () => {
+      if (!selectedSchemaId) {
+        setSchemaTemplate(null)
+        return
+      }
+      
+      try {
+        const template = await getSchemaTemplate(selectedSchemaId)
+        if (template) {
+          setSchemaTemplate(template)
+        } else {
+          console.error(`No se encontró el schema template para ${selectedSchemaId}`)
+          setSchemaTemplate(null)
+        }
+      } catch (error) {
+        console.error("Error al cargar schema template:", error)
+        setSchemaTemplate(null)
+      }
+    }
+    
+    loadSchemaTemplate()
+  }, [selectedSchemaId])
+  
+  // Cargar mapeos filtrados por schema cuando cambia el schema seleccionado
+  useEffect(() => {
+    const loadMappings = async () => {
+      if (!selectedSchemaId) {
+        setAvailableMappings([])
+        setSelectedMapping(null)
+        return
+      }
+      
+      setIsLoadingMappings(true)
+      try {
+        const allMappings = await getMappings()
+        // Filtrar mapeos por schemaId
+        const filteredMappings = allMappings.filter((m) => m.schemaId === selectedSchemaId)
+        setAvailableMappings(filteredMappings)
+        
+        // Si había un mapeo seleccionado pero no pertenece al nuevo schema, limpiarlo
+        if (selectedMapping && selectedMapping.schemaId !== selectedSchemaId) {
+          setSelectedMapping(null)
+          setSchemaTemplate(null)
+        }
+      } catch (error) {
+        console.error("Error al cargar mappings:", error)
+        setAvailableMappings([])
+      } finally {
+        setIsLoadingMappings(false)
+      }
+    }
+    
+    loadMappings()
+  }, [selectedSchemaId])
 
   // Colapsar automáticamente cuando hay archivos procesados
   useEffect(() => {
@@ -73,6 +161,14 @@ export default function ProcessPage() {
     setError(null)
     
     if (mapping) {
+      // Verificar que el mapping pertenezca al schema seleccionado
+      if (selectedSchemaId && mapping.schemaId !== selectedSchemaId) {
+        setError(`El mapeo seleccionado pertenece a otro schema (${mapping.schemaId})`)
+        setSelectedMapping(null)
+        setSchemaTemplate(null)
+        return
+      }
+      
       try {
         const template = await getSchemaTemplate(mapping.schemaId)
         if (!template) {
@@ -769,7 +865,7 @@ export default function ProcessPage() {
       }),
   ]
 
-  const canProcess = selectedMapping !== null && schemaTemplate !== null && files.length > 0 && !isProcessing
+  const canProcess = selectedSchemaId !== null && selectedMapping !== null && schemaTemplate !== null && files.length > 0 && !isProcessing
 
   // Obtener lista única de operaciones
   const availableOperations = useMemo(() => {
@@ -810,11 +906,97 @@ export default function ProcessPage() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <AuditHeader 
-        selectedMappingId={selectedMapping?.id || null} 
-        onMappingSelect={handleMappingSelect}
-        title="Procesar múltiples archivos Excel"
-      />
+      <header className="border-b border-border bg-card shrink-0">
+        <div className="container mx-auto px-4 py-3">
+          <h1 className="text-lg font-semibold text-foreground mb-4">Procesar múltiples archivos Excel</h1>
+          
+          {/* Selectores de Schema y Mapeo */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Selector de Schema */}
+            <div className="space-y-2">
+              <Label htmlFor="schema-select-process" className="text-sm font-medium">
+                Schema
+              </Label>
+              <Select
+                value={selectedSchemaId || ""}
+                onValueChange={(value) => {
+                  setSelectedSchemaId(value)
+                  setSelectedMapping(null) // Limpiar mapeo cuando cambia el schema
+                  setSchemaTemplate(null)
+                  setResults([])
+                  setAuditFiles([])
+                }}
+                disabled={isLoadingSchemas}
+              >
+                <SelectTrigger id="schema-select-process" className="w-full">
+                  <SelectValue placeholder={isLoadingSchemas ? "Cargando schemas..." : "Seleccionar schema"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableSchemas.length === 0 && !isLoadingSchemas && (
+                    <SelectItem value="no-schemas" disabled>
+                      No hay schemas disponibles
+                    </SelectItem>
+                  )}
+                  {availableSchemas.map((schema) => (
+                    <SelectItem key={schema.schemaId} value={schema.schemaId}>
+                      {schema.name} ({schema.schemaId})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            {/* Selector de Mapeo */}
+            <div className="space-y-2">
+              <Label htmlFor="mapping-select-process" className="text-sm font-medium">
+                Mapeo
+              </Label>
+              <Select
+                value={selectedMapping?.id || ""}
+                onValueChange={(value) => {
+                  const mapping = availableMappings.find((m) => m.id === value) || null
+                  handleMappingSelect(mapping)
+                }}
+                disabled={!selectedSchemaId || isLoadingMappings}
+              >
+                <SelectTrigger id="mapping-select-process" className="w-full">
+                  <SelectValue 
+                    placeholder={
+                      !selectedSchemaId 
+                        ? "Seleccioná un schema primero" 
+                        : isLoadingMappings 
+                        ? "Cargando mapeos..." 
+                        : "Seleccionar mapeo"
+                    } 
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {!selectedSchemaId && (
+                    <SelectItem value="no-schema" disabled>
+                      Seleccioná un schema primero
+                    </SelectItem>
+                  )}
+                  {selectedSchemaId && availableMappings.length === 0 && !isLoadingMappings && (
+                    <SelectItem value="no-mappings" disabled>
+                      No hay mapeos guardados para este schema
+                    </SelectItem>
+                  )}
+                  {availableMappings.map((mapping) => (
+                    <SelectItem key={mapping.id} value={mapping.id}>
+                      {mapping.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {selectedMapping && (
+                <p className="text-xs text-muted-foreground">
+                  {selectedMapping.headerMappings.length} headers • {selectedMapping.tableMappings.length} columnas
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      </header>
       <div className="w-full py-8 px-6 flex-1">
         <div className="space-y-6">
           <div>
@@ -895,7 +1077,11 @@ export default function ProcessPage() {
                     </div>
                   )}
                   
-                  <MultiFileUpload files={files} onFilesChange={setFiles} />
+                  <MultiFileUpload 
+                    files={files} 
+                    onFilesChange={setFiles}
+                    disabled={!selectedSchemaId || !selectedMapping}
+                  />
 
                   <Card className="p-4">
                     <div className="flex items-center justify-between">
@@ -906,7 +1092,11 @@ export default function ProcessPage() {
                           {selectedMapping && ` • Mapeo: ${selectedMapping.name}`}
                         </p>
                       </div>
-                      <Button onClick={processFiles} disabled={!canProcess}>
+                      <Button 
+                        onClick={processFiles} 
+                        disabled={!canProcess}
+                        title={!selectedSchemaId ? "Seleccioná un schema primero" : !selectedMapping ? "Seleccioná un mapeo primero" : files.length === 0 ? "Seleccioná al menos un archivo" : ""}
+                      >
                         {isProcessing ? (
                           <>
                             <Loader2 className="mr-2 h-4 w-4 animate-spin" />

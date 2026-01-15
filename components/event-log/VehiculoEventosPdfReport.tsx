@@ -1,6 +1,6 @@
 import React from "react"
 import { Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer"
-import type { VehiculoEventosFile } from "@/domains/vehiculo/types"
+import type { VehiculoEventosFile, VehiculoEvento } from "@/domains/vehiculo/types"
 import type { SecurityAlert } from "./securityAlerts"
 
 interface VehiculoEventosPdfReportProps {
@@ -207,6 +207,116 @@ function getSeverityLabel(severity: SecurityAlert["severity"]): string {
   }
 }
 
+// Función para generar resumen ejecutivo interpretativo
+function generarResumenEjecutivo(
+  totalEventos: number,
+  eventosFatiga: number,
+  eventosCriticos: number,
+  vehiculosUnicos: number,
+  operadoresUnicos: number,
+  allEventos: VehiculoEvento[],
+  securityAlert: SecurityAlert
+): string {
+  const partes: string[] = []
+
+  // Calcular porcentaje de eventos de fatiga
+  const porcentajeFatiga =
+    totalEventos > 0 ? Math.round((eventosFatiga / totalEventos) * 100) : 0
+
+  // Calcular franja horaria con más eventos
+  const franjas = [
+    { nombre: "00-06", inicio: 0, fin: 6 },
+    { nombre: "06-12", inicio: 6, fin: 12 },
+    { nombre: "12-18", inicio: 12, fin: 18 },
+    { nombre: "18-24", inicio: 18, fin: 24 },
+  ]
+
+  const conteoFranjas: Record<string, number> = {
+    "00-06": 0,
+    "06-12": 0,
+    "12-18": 0,
+    "18-24": 0,
+  }
+
+  allEventos.forEach((evento) => {
+    const hora = evento.fecha.getHours()
+    for (const franja of franjas) {
+      if (hora >= franja.inicio && hora < franja.fin) {
+        conteoFranjas[franja.nombre]++
+        break
+      }
+    }
+  })
+
+  const franjaMasEventos = Object.entries(conteoFranjas).reduce((a, b) =>
+    conteoFranjas[a[0]] > conteoFranjas[b[0]] ? a : b
+  )
+
+  // Primera parte: Total de eventos y predominio
+  if (totalEventos > 0) {
+    partes.push(
+      `Durante el período analizado se registraron ${totalEventos.toLocaleString()} evento${totalEventos !== 1 ? "s" : ""}`
+    )
+
+    if (eventosFatiga > 0 && porcentajeFatiga >= 50) {
+      partes.push(
+        `con predominio de eventos de fatiga (${porcentajeFatiga}%)`
+      )
+    } else if (eventosCriticos > 0) {
+      const porcentajeCriticos = Math.round(
+        (eventosCriticos / totalEventos) * 100
+      )
+      partes.push(
+        `con ${porcentajeCriticos}% de eventos críticos de seguridad`
+      )
+    }
+  }
+
+  // Segunda parte: Alertas
+  if (securityAlert.severity !== "OK") {
+    const severidadTexto =
+      securityAlert.severity === "CRITICAL"
+        ? "crítica"
+        : securityAlert.severity === "HIGH"
+        ? "alta"
+        : "media"
+
+    if (securityAlert.count) {
+      partes.push(
+        `Se detectó una alerta ${severidadTexto} de seguridad, asociada a ${securityAlert.count} evento${securityAlert.count !== 1 ? "s" : ""}`
+      )
+    } else {
+      partes.push(`Se detectó una alerta ${severidadTexto} de seguridad`)
+    }
+
+    // Agregar contexto si hay reincidencia
+    if (operadoresUnicos < eventosCriticos / 2) {
+      partes.push("con reincidencia de eventos en operadores específicos")
+    }
+  }
+
+  // Tercera parte: Franja horaria
+  if (franjaMasEventos[1] > 0) {
+    const horaInicio = franjaMasEventos[0].split("-")[0]
+    const horaFin = franjaMasEventos[0].split("-")[1]
+    partes.push(
+      `La mayor concentración de eventos ocurrió en la franja ${horaInicio}–${horaFin} h, lo que sugiere revisar turnos y descansos`
+    )
+  }
+
+  // Cuarta parte: Contexto adicional si aplica
+  if (vehiculosUnicos > 0 && operadoresUnicos > 0) {
+    const ratioEventosPorOperador = totalEventos / operadoresUnicos
+    if (ratioEventosPorOperador > 5) {
+      partes.push(
+        `Se observa una alta concentración de eventos por operador, recomendando capacitación adicional`
+      )
+    }
+  }
+
+  return partes.join(". ") + "."
+}
+
 export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> = ({
   data,
   securityAlert,
@@ -258,6 +368,17 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
 
   const alertStyles = getAlertStyles(securityAlert.severity)
 
+  // Generar resumen ejecutivo interpretativo
+  const resumenEjecutivoTexto = generarResumenEjecutivo(
+    totalEventos,
+    eventosFatiga,
+    eventosCriticos,
+    vehiculosUnicos,
+    operadoresUnicos,
+    allEventos,
+    securityAlert
+  )
+
   return (
     <Document>
       {/* Portada */}
@@ -301,6 +422,46 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
             Las alertas de seguridad se generan automáticamente basándose en reglas de prevención
             de riesgos. Se recomienda revisar y tomar acciones preventivas según la severidad indicada.
           </Text>
+        </View>
+
+        <Text style={styles.pageNumber} render={({ pageNumber }) => `Página ${pageNumber}`} fixed />
+      </Page>
+
+      {/* Resumen Ejecutivo del Período */}
+      <Page size="A4" style={styles.page}>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>RESUMEN EJECUTIVO DEL PERÍODO</Text>
+
+          <Text style={styles.subsectionTitle}>Análisis Interpretativo</Text>
+          <Text style={[styles.text, { marginBottom: 20, lineHeight: 1.8 }]}>
+            {resumenEjecutivoTexto}
+          </Text>
+
+          <Text style={styles.subsectionTitle}>Indicadores Clave</Text>
+          <View style={styles.kpiGrid}>
+            <View style={styles.kpiCard}>
+              <Text style={styles.kpiLabel}>Total de Eventos</Text>
+              <Text style={styles.kpiValue}>{totalEventos.toLocaleString()}</Text>
+            </View>
+            <View style={styles.kpiCard}>
+              <Text style={styles.kpiLabel}>Eventos de Fatiga</Text>
+              <Text style={styles.kpiValue}>{eventosFatiga.toLocaleString()}</Text>
+            </View>
+            <View style={styles.kpiCard}>
+              <Text style={styles.kpiLabel}>Vehículos Únicos</Text>
+              <Text style={styles.kpiValue}>{vehiculosUnicos.toLocaleString()}</Text>
+            </View>
+            <View style={styles.kpiCard}>
+              <Text style={styles.kpiLabel}>Operadores Únicos</Text>
+              <Text style={styles.kpiValue}>{operadoresUnicos.toLocaleString()}</Text>
+            </View>
+            {velocidadMaxima > 0 && (
+              <View style={styles.kpiCard}>
+                <Text style={styles.kpiLabel}>Velocidad Máxima</Text>
+                <Text style={styles.kpiValue}>{velocidadMaxima.toLocaleString()} km/h</Text>
+              </View>
+            )}
+          </View>
         </View>
 
         <Text style={styles.pageNumber} render={({ pageNumber }) => `Página ${pageNumber}`} fixed />

@@ -9,12 +9,13 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import type { VehiculoEventosFile, VehiculoEvento } from "@/domains/vehiculo/types"
 import { format } from "date-fns"
 import { pdf } from "@react-pdf/renderer"
-import { FileDown } from "lucide-react"
+import { FileDown, AlertTriangle, Car, Users, Gauge } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { generateSecurityBanner } from "./securityAlerts"
 import { SecurityAlertBanner } from "./SecurityAlertBanner"
 import { VehiculoEventosPdfReport } from "./VehiculoEventosPdfReport"
 import { EventChartsSection } from "./EventChartsSection"
+import { ExecutiveSummary } from "./ExecutiveSummary"
 
 interface EventLogViewProps {
   data: VehiculoEventosFile[]
@@ -208,43 +209,61 @@ export function EventLogView({ data }: EventLogViewProps) {
         </Card>
       </div>
 
+      {/* Banner de alerta de seguridad */}
+      <SecurityAlertBanner alert={securityAlert} />
+
       {/* KPIs ejecutivos adicionales */}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <Card className="p-4">
-          <div className="space-y-1">
-            <p className="text-sm font-medium text-muted-foreground">Eventos críticos</p>
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-destructive" />
+              <p className="text-sm font-medium text-muted-foreground">Eventos críticos</p>
+            </div>
             <p className="text-2xl font-bold">{kpisEjecutivos.eventosCriticos.toLocaleString()}</p>
-            <p className="text-xs text-muted-foreground">D1 o D3</p>
+            <p className="text-xs text-muted-foreground">Eventos de alta prioridad</p>
           </div>
         </Card>
 
         <Card className="p-4">
-          <div className="space-y-1">
-            <p className="text-sm font-medium text-muted-foreground">Eventos de fatiga</p>
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-orange-500" />
+              <p className="text-sm font-medium text-muted-foreground">Eventos de fatiga</p>
+            </div>
             <p className="text-2xl font-bold">{kpisEjecutivos.eventosFatiga.toLocaleString()}</p>
-            <p className="text-xs text-muted-foreground">Tipo D1</p>
+            <p className="text-xs text-muted-foreground">Microsueños detectados</p>
           </div>
         </Card>
 
         <Card className="p-4">
-          <div className="space-y-1">
-            <p className="text-sm font-medium text-muted-foreground">Vehículos únicos</p>
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Car className="h-4 w-4 text-blue-500" />
+              <p className="text-sm font-medium text-muted-foreground">Vehículos únicos</p>
+            </div>
             <p className="text-2xl font-bold">{kpisEjecutivos.vehiculosUnicos.toLocaleString()}</p>
             <p className="text-xs text-muted-foreground">Total distintos</p>
           </div>
         </Card>
 
         <Card className="p-4">
-          <div className="space-y-1">
-            <p className="text-sm font-medium text-muted-foreground">Operadores únicos</p>
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Users className="h-4 w-4 text-green-500" />
+              <p className="text-sm font-medium text-muted-foreground">Operadores únicos</p>
+            </div>
             <p className="text-2xl font-bold">{kpisEjecutivos.operadoresUnicos.toLocaleString()}</p>
             <p className="text-xs text-muted-foreground">Total distintos</p>
           </div>
         </Card>
 
         <Card className="p-4">
-          <div className="space-y-1">
-            <p className="text-sm font-medium text-muted-foreground">Velocidad máxima</p>
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Gauge className="h-4 w-4 text-purple-500" />
+              <p className="text-sm font-medium text-muted-foreground">Velocidad máxima</p>
+            </div>
             <p className="text-2xl font-bold">
               {kpisEjecutivos.velocidadMaxima > 0
                 ? `${kpisEjecutivos.velocidadMaxima.toLocaleString()} km/h`
@@ -255,8 +274,12 @@ export function EventLogView({ data }: EventLogViewProps) {
         </Card>
       </div>
 
-      {/* Banner de alerta de seguridad */}
-      <SecurityAlertBanner alert={securityAlert} />
+      {/* Resumen Ejecutivo */}
+      <ExecutiveSummary
+        eventos={allEventos}
+        kpisEjecutivos={kpisEjecutivos}
+        securityAlert={securityAlert}
+      />
 
       {/* Sección de gráficos */}
       <EventChartsSection eventos={allEventos} />

@@ -19,6 +19,7 @@ interface VehiculoEventosPdfReportProps {
 const styles = StyleSheet.create({
   page: {
     padding: 40,
+    paddingBottom: 60, // Espacio para el footer
     fontSize: 11,
     fontFamily: "Helvetica",
     backgroundColor: "#FFFFFF",
@@ -216,6 +217,40 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     marginBottom: 10,
   },
+  sectionDivider: {
+    height: 1,
+    backgroundColor: "#e5e7eb",
+    marginVertical: 20,
+  },
+  sectionSpacer: {
+    marginBottom: 25,
+  },
+  footer: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingVertical: 10,
+    paddingHorizontal: 40,
+    borderTopWidth: 1,
+    borderTopColor: "#e5e7eb",
+    borderTopStyle: "solid",
+    backgroundColor: "#ffffff",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  footerText: {
+    fontSize: 8,
+    color: "#6b7280",
+    flex: 1,
+  },
+  footerCenter: {
+    fontSize: 8,
+    color: "#6b7280",
+    textAlign: "center",
+    flex: 1,
+  },
 })
 
 function getAlertStyles(severity: SecurityAlert["severity"]) {
@@ -374,6 +409,25 @@ function generarResumenEjecutivo(
   return partes.join(". ") + "."
 }
 
+// Componente de Footer reutilizable
+const PdfFooter: React.FC = () => {
+  const fechaHoraGeneracion = new Date().toLocaleString("es-AR", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  })
+
+  return (
+    <View style={styles.footer} fixed>
+      <Text style={styles.footerText}>Generado por ControlMapping</Text>
+      <Text style={styles.footerCenter}>{fechaHoraGeneracion}</Text>
+      <Text style={styles.footerText} render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`} />
+    </View>
+  )
+}
+
 export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> = ({
   data,
   securityAlert,
@@ -502,30 +556,32 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
             <Text style={styles.executiveSubtitle}>Análisis de Riesgos y Prioridades</Text>
             <Text style={styles.executiveDate}>Generado el {fechaGeneracion}</Text>
           </View>
+          <PdfFooter />
         </Page>
 
-        {/* 2. Resumen Ejecutivo */}
+        {/* 2. Resumen Ejecutivo + Alertas de Seguridad */}
         <Page size="A4" style={styles.page}>
-          <View style={styles.section}>
+          {/* Resumen Ejecutivo */}
+          <View wrap={false} style={styles.sectionSpacer}>
             <Text style={styles.sectionTitle}>RESUMEN EJECUTIVO</Text>
-            <Text style={[styles.text, { fontSize: 12, lineHeight: 1.8, marginBottom: 20 }]}>
+            <Text style={[styles.text, { fontSize: 12, lineHeight: 1.8 }]}>
               {resumenEjecutivoTexto}
             </Text>
           </View>
-          <Text style={styles.pageNumber} render={({ pageNumber }) => `Página ${pageNumber}`} fixed />
-        </Page>
 
-        {/* 3. Alertas de Seguridad */}
-        <Page size="A4" style={styles.page}>
-          <View style={styles.section}>
+          {/* Separador visual */}
+          <View style={styles.sectionDivider} />
+
+          {/* Alertas de Seguridad */}
+          <View wrap={false}>
             <Text style={styles.sectionTitle}>ALERTAS DE SEGURIDAD</Text>
-            <View style={[styles.alertBanner, alertStyles.banner, { padding: 20, marginBottom: 20 }]}>
+            <View style={[styles.alertBanner, alertStyles.banner, { padding: 15, marginBottom: 10 }]}>
               {securityAlert.severity !== "OK" && (
-                <Text style={[styles.alertTitle, alertStyles.title, { fontSize: 16 }]}>
+                <Text style={[styles.alertTitle, alertStyles.title, { fontSize: 14 }]}>
                   ALERTA {getSeverityLabel(securityAlert.severity)} DE SEGURIDAD
                 </Text>
               )}
-              <Text style={[styles.alertMessage, alertStyles.message, { fontSize: 12, lineHeight: 1.8 }]}>
+              <Text style={[styles.alertMessage, alertStyles.message, { fontSize: 11, lineHeight: 1.6 }]}>
                 {securityAlert.message}
               </Text>
               {securityAlert.severity !== "OK" && (
@@ -533,27 +589,29 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
                   style={[
                     styles.alertBadge,
                     alertStyles.badge[1] || styles.badgeCritical,
-                    { marginTop: 10, padding: 8 },
+                    { marginTop: 8, padding: 6 },
                   ]}
                 >
-                  <Text style={{ color: "#ffffff", fontSize: 12, fontWeight: "bold" }}>
+                  <Text style={{ color: "#ffffff", fontSize: 10, fontWeight: "bold" }}>
                     {getSeverityLabel(securityAlert.severity)}
                   </Text>
                 </View>
               )}
               {securityAlert.count && (
-                <Text style={[styles.text, alertStyles.message, { marginTop: 10, fontSize: 11 }]}>
+                <Text style={[styles.text, alertStyles.message, { marginTop: 8, fontSize: 10 }]}>
                   Eventos relacionados: {securityAlert.count}
                 </Text>
               )}
             </View>
           </View>
-          <Text style={styles.pageNumber} render={({ pageNumber }) => `Página ${pageNumber}`} fixed />
+
+          <PdfFooter />
         </Page>
 
-        {/* 4. KPIs Ejecutivos */}
+        {/* 3. Indicadores Clave + Prioridades de Intervención */}
         <Page size="A4" style={styles.page}>
-          <View style={styles.section}>
+          {/* KPIs Ejecutivos */}
+          <View wrap={false} style={styles.sectionSpacer}>
             <Text style={styles.sectionTitle}>INDICADORES CLAVE</Text>
             <View style={styles.kpiGrid}>
               <View style={styles.kpiCard}>
@@ -584,55 +642,59 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
               )}
             </View>
           </View>
-          <Text style={styles.pageNumber} render={({ pageNumber }) => `Página ${pageNumber}`} fixed />
+
+          {/* Separador visual */}
+          {(top3Operadores.length > 0 || top3Vehiculos.length > 0) && (
+            <>
+              <View style={styles.sectionDivider} />
+
+              {/* Prioridades de Intervención */}
+              <View wrap={false}>
+                <Text style={styles.sectionTitle}>PRIORIDADES DE INTERVENCIÓN</Text>
+                
+                {top3Operadores.length > 0 && (
+                  <>
+                    <Text style={styles.subsectionTitle}>Operadores Críticos</Text>
+                    {top3Operadores.map((op, idx) => (
+                      <View key={op.operador} style={styles.priorityCard}>
+                        <Text style={{ fontSize: 11, fontWeight: "bold", marginBottom: 4 }}>
+                          #{idx + 1} - {op.operador}
+                        </Text>
+                        <Text style={{ fontSize: 9, color: "#374151" }}>
+                          Score: {op.score.toFixed(1)} • Eventos: {op.totalEventos} • Fatiga: {op.eventosFatiga}
+                        </Text>
+                      </View>
+                    ))}
+                  </>
+                )}
+
+                {top3Vehiculos.length > 0 && (
+                  <>
+                    <Text style={[styles.subsectionTitle, { marginTop: 12 }]}>Vehículos Críticos</Text>
+                    {top3Vehiculos.map((veh, idx) => (
+                      <View key={veh.vehiculo} style={styles.priorityCard}>
+                        <Text style={{ fontSize: 11, fontWeight: "bold", marginBottom: 4 }}>
+                          #{idx + 1} - {veh.vehiculo}
+                        </Text>
+                        <Text style={{ fontSize: 9, color: "#374151" }}>
+                          Score: {veh.score.toFixed(1)} • Eventos: {veh.totalEventos} • Críticos: {veh.eventosCriticos}
+                        </Text>
+                      </View>
+                    ))}
+                  </>
+                )}
+              </View>
+            </>
+          )}
+
+          <PdfFooter />
         </Page>
 
-        {/* 5. Prioridades de Intervención */}
+        {/* 4. Factores de Riesgo + Rankings (si entran completos) */}
         {(top3Operadores.length > 0 || top3Vehiculos.length > 0) && (
           <Page size="A4" style={styles.page}>
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>PRIORIDADES DE INTERVENCIÓN</Text>
-              
-              {top3Operadores.length > 0 && (
-                <>
-                  <Text style={styles.subsectionTitle}>Operadores Críticos</Text>
-                  {top3Operadores.map((op, idx) => (
-                    <View key={op.operador} style={styles.priorityCard}>
-                      <Text style={{ fontSize: 12, fontWeight: "bold", marginBottom: 5 }}>
-                        #{idx + 1} - {op.operador}
-                      </Text>
-                      <Text style={{ fontSize: 10, color: "#374151", marginBottom: 3 }}>
-                        Score: {op.score.toFixed(1)} • Eventos: {op.totalEventos} • Fatiga: {op.eventosFatiga}
-                      </Text>
-                    </View>
-                  ))}
-                </>
-              )}
-
-              {top3Vehiculos.length > 0 && (
-                <>
-                  <Text style={[styles.subsectionTitle, { marginTop: 15 }]}>Vehículos Críticos</Text>
-                  {top3Vehiculos.map((veh, idx) => (
-                    <View key={veh.vehiculo} style={styles.priorityCard}>
-                      <Text style={{ fontSize: 12, fontWeight: "bold", marginBottom: 5 }}>
-                        #{idx + 1} - {veh.vehiculo}
-                      </Text>
-                      <Text style={{ fontSize: 10, color: "#374151", marginBottom: 3 }}>
-                        Score: {veh.score.toFixed(1)} • Eventos: {veh.totalEventos} • Críticos: {veh.eventosCriticos}
-                      </Text>
-                    </View>
-                  ))}
-                </>
-              )}
-            </View>
-            <Text style={styles.pageNumber} render={({ pageNumber }) => `Página ${pageNumber}`} fixed />
-          </Page>
-        )}
-
-        {/* 6. Factores de Riesgo */}
-        {(top3Operadores.length > 0 || top3Vehiculos.length > 0) && (
-          <Page size="A4" style={styles.page}>
-            <View style={styles.section}>
+            {/* Factores de Riesgo */}
+            <View wrap={false} style={styles.sectionSpacer}>
               <Text style={styles.sectionTitle}>FACTORES DE RIESGO DOMINANTES</Text>
               
               {top3Operadores.length > 0 && (
@@ -642,37 +704,37 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
                     const drivers = operadoresDrivers.find((d) => d.operador === op.operador)
                     if (!drivers) return null
                     return (
-                      <View key={op.operador} style={{ marginBottom: 15 }}>
-                        <Text style={{ fontSize: 11, fontWeight: "bold", marginBottom: 5 }}>
+                      <View key={op.operador} style={{ marginBottom: 12 }}>
+                        <Text style={{ fontSize: 10, fontWeight: "bold", marginBottom: 4 }}>
                           {op.operador}
                         </Text>
                         {drivers.drivers.fatigaPct > 0 && (
-                          <View style={{ marginBottom: 5 }}>
-                            <Text style={{ fontSize: 9, color: "#6b7280" }}>
+                          <View style={{ marginBottom: 4 }}>
+                            <Text style={{ fontSize: 8, color: "#6b7280" }}>
                               Fatiga: {drivers.drivers.fatigaPct.toFixed(1)}%
                             </Text>
                             <View style={[styles.driverBar, { backgroundColor: "#fee2e2", width: "100%" }]}>
-                              <View style={{ height: 8, backgroundColor: "#dc2626", width: `${drivers.drivers.fatigaPct}%` }} />
+                              <View style={{ height: 6, backgroundColor: "#dc2626", width: `${drivers.drivers.fatigaPct}%` }} />
                             </View>
                           </View>
                         )}
                         {drivers.drivers.velocidadPct > 0 && (
-                          <View style={{ marginBottom: 5 }}>
-                            <Text style={{ fontSize: 9, color: "#6b7280" }}>
+                          <View style={{ marginBottom: 4 }}>
+                            <Text style={{ fontSize: 8, color: "#6b7280" }}>
                               Velocidad: {drivers.drivers.velocidadPct.toFixed(1)}%
                             </Text>
                             <View style={[styles.driverBar, { backgroundColor: "#ffedd5", width: "100%" }]}>
-                              <View style={{ height: 8, backgroundColor: "#ea580c", width: `${drivers.drivers.velocidadPct}%` }} />
+                              <View style={{ height: 6, backgroundColor: "#ea580c", width: `${drivers.drivers.velocidadPct}%` }} />
                             </View>
                           </View>
                         )}
                         {drivers.drivers.reincidenciaPct > 0 && (
-                          <View style={{ marginBottom: 5 }}>
-                            <Text style={{ fontSize: 9, color: "#6b7280" }}>
+                          <View style={{ marginBottom: 4 }}>
+                            <Text style={{ fontSize: 8, color: "#6b7280" }}>
                               Reincidencia: {drivers.drivers.reincidenciaPct.toFixed(1)}%
                             </Text>
                             <View style={[styles.driverBar, { backgroundColor: "#fef9c3", width: "100%" }]}>
-                              <View style={{ height: 8, backgroundColor: "#eab308", width: `${drivers.drivers.reincidenciaPct}%` }} />
+                              <View style={{ height: 6, backgroundColor: "#eab308", width: `${drivers.drivers.reincidenciaPct}%` }} />
                             </View>
                           </View>
                         )}
@@ -684,42 +746,42 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
 
               {top3Vehiculos.length > 0 && (
                 <>
-                  <Text style={[styles.subsectionTitle, { marginTop: 15 }]}>Vehículos</Text>
+                  <Text style={[styles.subsectionTitle, { marginTop: 12 }]}>Vehículos</Text>
                   {top3Vehiculos.map((veh) => {
                     const drivers = vehiculosDrivers.find((d) => d.vehiculo === veh.vehiculo)
                     if (!drivers) return null
                     return (
-                      <View key={veh.vehiculo} style={{ marginBottom: 15 }}>
-                        <Text style={{ fontSize: 11, fontWeight: "bold", marginBottom: 5 }}>
+                      <View key={veh.vehiculo} style={{ marginBottom: 12 }}>
+                        <Text style={{ fontSize: 10, fontWeight: "bold", marginBottom: 4 }}>
                           {veh.vehiculo}
                         </Text>
                         {drivers.drivers.fatigaPct > 0 && (
-                          <View style={{ marginBottom: 5 }}>
-                            <Text style={{ fontSize: 9, color: "#6b7280" }}>
+                          <View style={{ marginBottom: 4 }}>
+                            <Text style={{ fontSize: 8, color: "#6b7280" }}>
                               Fatiga: {drivers.drivers.fatigaPct.toFixed(1)}%
                             </Text>
                             <View style={[styles.driverBar, { backgroundColor: "#fee2e2", width: "100%" }]}>
-                              <View style={{ height: 8, backgroundColor: "#dc2626", width: `${drivers.drivers.fatigaPct}%` }} />
+                              <View style={{ height: 6, backgroundColor: "#dc2626", width: `${drivers.drivers.fatigaPct}%` }} />
                             </View>
                           </View>
                         )}
                         {drivers.drivers.velocidadPct > 0 && (
-                          <View style={{ marginBottom: 5 }}>
-                            <Text style={{ fontSize: 9, color: "#6b7280" }}>
+                          <View style={{ marginBottom: 4 }}>
+                            <Text style={{ fontSize: 8, color: "#6b7280" }}>
                               Velocidad: {drivers.drivers.velocidadPct.toFixed(1)}%
                             </Text>
                             <View style={[styles.driverBar, { backgroundColor: "#ffedd5", width: "100%" }]}>
-                              <View style={{ height: 8, backgroundColor: "#ea580c", width: `${drivers.drivers.velocidadPct}%` }} />
+                              <View style={{ height: 6, backgroundColor: "#ea580c", width: `${drivers.drivers.velocidadPct}%` }} />
                             </View>
                           </View>
                         )}
                         {drivers.drivers.reincidenciaPct > 0 && (
-                          <View style={{ marginBottom: 5 }}>
-                            <Text style={{ fontSize: 9, color: "#6b7280" }}>
+                          <View style={{ marginBottom: 4 }}>
+                            <Text style={{ fontSize: 8, color: "#6b7280" }}>
                               Reincidencia: {drivers.drivers.reincidenciaPct.toFixed(1)}%
                             </Text>
                             <View style={[styles.driverBar, { backgroundColor: "#fef9c3", width: "100%" }]}>
-                              <View style={{ height: 8, backgroundColor: "#eab308", width: `${drivers.drivers.reincidenciaPct}%` }} />
+                              <View style={{ height: 6, backgroundColor: "#eab308", width: `${drivers.drivers.reincidenciaPct}%` }} />
                             </View>
                           </View>
                         )}
@@ -729,14 +791,125 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
                 </>
               )}
             </View>
-            <Text style={styles.pageNumber} render={({ pageNumber }) => `Página ${pageNumber}`} fixed />
+
+            {/* Separador visual - solo si hay rankings para mostrar */}
+            {(operadoresScores.length > 0 || vehiculosScores.length > 0) && (
+              <>
+                <View style={styles.sectionDivider} />
+
+                {/* Rankings Resumidos */}
+                <View wrap={false}>
+                  <Text style={styles.sectionTitle}>RANKINGS DE RIESGO</Text>
+                  
+                  {operadoresScores.length > 0 && (
+                    <>
+                      <Text style={styles.subsectionTitle}>Top 10 Operadores por Score de Riesgo</Text>
+                      <View style={{ marginBottom: 15 }}>
+                        {operadoresScores.slice(0, 10).map((op, idx) => (
+                          <View
+                            key={op.operador}
+                            style={{
+                              flexDirection: "row",
+                              justifyContent: "space-between",
+                              paddingVertical: 5,
+                              paddingHorizontal: 8,
+                              backgroundColor: idx % 2 === 0 ? "#f9fafb" : "#ffffff",
+                              borderLeftWidth: op.level === "HIGH" ? 3 : op.level === "MEDIUM" ? 2 : 1,
+                              borderLeftColor:
+                                op.level === "HIGH" ? "#dc2626" : op.level === "MEDIUM" ? "#eab308" : "#22c55e",
+                              marginBottom: 2,
+                            }}
+                          >
+                            <View style={{ flexDirection: "row", flex: 1 }}>
+                              <Text style={{ fontSize: 9, color: "#6b7280", width: 25 }}>
+                                #{idx + 1}
+                              </Text>
+                              <Text style={{ fontSize: 9, fontWeight: op.level === "HIGH" ? "bold" : "normal", flex: 1 }}>
+                                {op.operador}
+                              </Text>
+                            </View>
+                            <View style={{ flexDirection: "row", gap: 10 }}>
+                              <Text style={{ fontSize: 9, color: "#6b7280", width: 40 }}>
+                                Score: {op.score.toFixed(1)}
+                              </Text>
+                              <Text
+                                style={{
+                                  fontSize: 9,
+                                  color:
+                                    op.level === "HIGH" ? "#dc2626" : op.level === "MEDIUM" ? "#eab308" : "#22c55e",
+                                  fontWeight: "bold",
+                                  width: 50,
+                                }}
+                              >
+                                {op.level}
+                              </Text>
+                            </View>
+                          </View>
+                        ))}
+                      </View>
+                    </>
+                  )}
+
+                  {vehiculosScores.length > 0 && (
+                    <>
+                      <Text style={[styles.subsectionTitle, { marginTop: 10 }]}>Top 10 Vehículos por Score de Riesgo</Text>
+                      <View>
+                        {vehiculosScores.slice(0, 10).map((veh, idx) => (
+                          <View
+                            key={veh.vehiculo}
+                            style={{
+                              flexDirection: "row",
+                              justifyContent: "space-between",
+                              paddingVertical: 5,
+                              paddingHorizontal: 8,
+                              backgroundColor: idx % 2 === 0 ? "#f9fafb" : "#ffffff",
+                              borderLeftWidth: veh.level === "HIGH" ? 3 : veh.level === "MEDIUM" ? 2 : 1,
+                              borderLeftColor:
+                                veh.level === "HIGH" ? "#dc2626" : veh.level === "MEDIUM" ? "#eab308" : "#22c55e",
+                              marginBottom: 2,
+                            }}
+                          >
+                            <View style={{ flexDirection: "row", flex: 1 }}>
+                              <Text style={{ fontSize: 9, color: "#6b7280", width: 25 }}>
+                                #{idx + 1}
+                              </Text>
+                              <Text style={{ fontSize: 9, fontWeight: veh.level === "HIGH" ? "bold" : "normal", flex: 1 }}>
+                                {veh.vehiculo}
+                              </Text>
+                            </View>
+                            <View style={{ flexDirection: "row", gap: 10 }}>
+                              <Text style={{ fontSize: 9, color: "#6b7280", width: 40 }}>
+                                Score: {veh.score.toFixed(1)}
+                              </Text>
+                              <Text
+                                style={{
+                                  fontSize: 9,
+                                  color:
+                                    veh.level === "HIGH" ? "#dc2626" : veh.level === "MEDIUM" ? "#eab308" : "#22c55e",
+                                  fontWeight: "bold",
+                                  width: 50,
+                                }}
+                              >
+                                {veh.level}
+                              </Text>
+                            </View>
+                          </View>
+                        ))}
+                      </View>
+                    </>
+                  )}
+                </View>
+              </>
+            )}
+
+            <PdfFooter />
           </Page>
         )}
 
-        {/* 7. Rankings Resumidos */}
-        {(operadoresScores.length > 0 || vehiculosScores.length > 0) && (
+        {/* 5. Rankings Resumidos (página propia si no entraron en la anterior) */}
+        {((top3Operadores.length === 0 && top3Vehiculos.length === 0) && (operadoresScores.length > 0 || vehiculosScores.length > 0)) && (
           <Page size="A4" style={styles.page}>
-            <View style={styles.section}>
+            <View wrap={false} style={styles.section}>
               <Text style={styles.sectionTitle}>RANKINGS DE RIESGO</Text>
               
               {operadoresScores.length > 0 && (
@@ -749,7 +922,7 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
                         style={{
                           flexDirection: "row",
                           justifyContent: "space-between",
-                          paddingVertical: 6,
+                          paddingVertical: 5,
                           paddingHorizontal: 8,
                           backgroundColor: idx % 2 === 0 ? "#f9fafb" : "#ffffff",
                           borderLeftWidth: op.level === "HIGH" ? 3 : op.level === "MEDIUM" ? 2 : 1,
@@ -762,7 +935,7 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
                           <Text style={{ fontSize: 9, color: "#6b7280", width: 25 }}>
                             #{idx + 1}
                           </Text>
-                          <Text style={{ fontSize: 10, fontWeight: op.level === "HIGH" ? "bold" : "normal", flex: 1 }}>
+                          <Text style={{ fontSize: 9, fontWeight: op.level === "HIGH" ? "bold" : "normal", flex: 1 }}>
                             {op.operador}
                           </Text>
                         </View>
@@ -798,7 +971,7 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
                         style={{
                           flexDirection: "row",
                           justifyContent: "space-between",
-                          paddingVertical: 6,
+                          paddingVertical: 5,
                           paddingHorizontal: 8,
                           backgroundColor: idx % 2 === 0 ? "#f9fafb" : "#ffffff",
                           borderLeftWidth: veh.level === "HIGH" ? 3 : veh.level === "MEDIUM" ? 2 : 1,
@@ -811,7 +984,7 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
                           <Text style={{ fontSize: 9, color: "#6b7280", width: 25 }}>
                             #{idx + 1}
                           </Text>
-                          <Text style={{ fontSize: 10, fontWeight: veh.level === "HIGH" ? "bold" : "normal", flex: 1 }}>
+                          <Text style={{ fontSize: 9, fontWeight: veh.level === "HIGH" ? "bold" : "normal", flex: 1 }}>
                             {veh.vehiculo}
                           </Text>
                         </View>
@@ -837,13 +1010,14 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
                 </>
               )}
             </View>
-            <Text style={styles.pageNumber} render={({ pageNumber }) => `Página ${pageNumber}`} fixed />
+            <PdfFooter />
           </Page>
         )}
 
-        {/* 8. Gráficos de Contexto */}
+        {/* 6. Análisis de Contexto + Recomendaciones (agrupadas) */}
         <Page size="A4" style={styles.page}>
-          <View style={styles.section}>
+          {/* Gráficos de Contexto */}
+          <View wrap={false} style={styles.sectionSpacer}>
             <Text style={styles.sectionTitle}>ANÁLISIS DE CONTEXTO</Text>
             
             <Text style={styles.subsectionTitle}>Distribución por Tipo de Evento</Text>
@@ -866,7 +1040,7 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
               </View>
             ))}
 
-            <Text style={[styles.subsectionTitle, { marginTop: 20 }]}>Distribución por Franja Horaria</Text>
+            <Text style={[styles.subsectionTitle, { marginTop: 15 }]}>Distribución por Franja Horaria</Text>
             {Object.entries(eventosPorFranja).map(([franja, cantidad]) => (
               <View key={franja} style={{ marginBottom: 8 }}>
                 <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 3 }}>
@@ -886,25 +1060,28 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
               </View>
             ))}
           </View>
-          <Text style={styles.pageNumber} render={({ pageNumber }) => `Página ${pageNumber}`} fixed />
-        </Page>
 
-        {/* 9. Recomendaciones Finales */}
-        {recomendaciones.length > 0 && (
-          <Page size="A4" style={styles.page}>
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>RECOMENDACIONES</Text>
-              {recomendaciones.map((rec, idx) => (
-                <View key={idx} style={styles.recommendationBox}>
-                  <Text style={{ fontSize: 11, lineHeight: 1.6 }}>
-                    {idx + 1}. {rec}
-                  </Text>
-                </View>
-              ))}
-            </View>
-            <Text style={styles.pageNumber} render={({ pageNumber }) => `Página ${pageNumber}`} fixed />
-          </Page>
-        )}
+          {/* Separador visual - solo si hay recomendaciones */}
+          {recomendaciones.length > 0 && (
+            <>
+              <View style={styles.sectionDivider} />
+
+              {/* Recomendaciones Finales */}
+              <View wrap={false}>
+                <Text style={styles.sectionTitle}>RECOMENDACIONES</Text>
+                {recomendaciones.map((rec, idx) => (
+                  <View key={idx} style={styles.recommendationBox}>
+                    <Text style={{ fontSize: 11, lineHeight: 1.6 }}>
+                      {idx + 1}. {rec}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            </>
+          )}
+
+          <PdfFooter />
+        </Page>
       </Document>
     )
   }
@@ -919,6 +1096,7 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
           <Text style={styles.subtitle}>Análisis de Telemetría y Seguridad</Text>
           <Text style={styles.date}>Generado el {fechaGeneracion}</Text>
         </View>
+        <PdfFooter />
       </Page>
 
       {/* Alertas de Seguridad */}
@@ -955,7 +1133,7 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
           </Text>
         </View>
 
-        <Text style={styles.pageNumber} render={({ pageNumber }) => `Página ${pageNumber}`} fixed />
+        <PdfFooter />
       </Page>
 
       {/* Resumen Ejecutivo del Período */}
@@ -995,7 +1173,7 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
           </View>
         </View>
 
-        <Text style={styles.pageNumber} render={({ pageNumber }) => `Página ${pageNumber}`} fixed />
+        <PdfFooter />
       </Page>
 
       {/* Análisis de Eventos */}
@@ -1056,7 +1234,7 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
           </Text>
         </View>
 
-        <Text style={styles.pageNumber} render={({ pageNumber }) => `Página ${pageNumber}`} fixed />
+        <PdfFooter />
       </Page>
 
       {/* Resumen Ejecutivo */}
@@ -1087,7 +1265,7 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
           </View>
         </View>
 
-        <Text style={styles.pageNumber} render={({ pageNumber }) => `Página ${pageNumber}`} fixed />
+        <PdfFooter />
       </Page>
     </Document>
   )

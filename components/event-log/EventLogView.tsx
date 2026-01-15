@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button"
 import { generateSecurityBanner } from "./securityAlerts"
 import { SecurityAlertBanner } from "./SecurityAlertBanner"
 import { VehiculoEventosPdfReport } from "./VehiculoEventosPdfReport"
+import { ExecutiveOnePagerView } from "./ExecutiveOnePagerView"
 import { EventChartsSection } from "./EventChartsSection"
 import { ExecutiveSummary } from "./ExecutiveSummary"
 import { RiskPriorityPanel } from "./RiskPriorityPanel"
@@ -146,7 +147,7 @@ export function EventLogView({ data }: EventLogViewProps) {
     }
   }
 
-  // Función para exportar PDF
+  // Función para exportar PDF completo
   const handleExportPdf = async () => {
     try {
       const pdfDoc = <VehiculoEventosPdfReport data={data} securityAlert={securityAlert} />
@@ -162,6 +163,25 @@ export function EventLogView({ data }: EventLogViewProps) {
     } catch (error) {
       console.error("Error al generar PDF:", error)
       alert("Error al generar el PDF. Por favor, intentá nuevamente.")
+    }
+  }
+
+  // Función para exportar One-Pager PDF
+  const handleExportOnePager = async () => {
+    try {
+      const pdfDoc = <ExecutiveOnePagerView data={data} securityAlert={securityAlert} />
+      const blob = await pdf(pdfDoc).toBlob()
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.href = url
+      link.download = `one-pager-ejecutivo-${new Date().toISOString().split("T")[0]}.pdf`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error("Error al generar One-Pager PDF:", error)
+      alert("Error al generar el One-Pager PDF. Por favor, intentá nuevamente.")
     }
   }
 
@@ -417,11 +437,15 @@ export function EventLogView({ data }: EventLogViewProps) {
         </div>
       </Card>
 
-      {/* Botón de exportar PDF */}
-      <div className="flex justify-end">
-        <Button onClick={handleExportPdf} className="gap-2">
+      {/* Botones de exportación */}
+      <div className="flex justify-end gap-2">
+        <Button onClick={handleExportPdf} className="gap-2" variant="outline">
           <FileDown className="h-4 w-4" />
-          Exportar PDF
+          Exportar PDF Completo
+        </Button>
+        <Button onClick={handleExportOnePager} className="gap-2">
+          <FileDown className="h-4 w-4" />
+          Exportar One-Pager PDF
         </Button>
       </div>
     </div>

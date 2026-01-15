@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import type { VehiculoEvento } from "@/domains/vehiculo/types"
-import { calculateRiskScoreByVehicle, type RiskLevel } from "./riskScoring"
+import { computeVehicleRiskProfiles, type RiskLevel } from "./riskModel"
 
 interface RiskRankingVehiclesProps {
   eventos: VehiculoEvento[]
@@ -35,7 +35,7 @@ function getRiskBadgeClassName(level: RiskLevel): string {
 
 export function RiskRankingVehicles({ eventos }: RiskRankingVehiclesProps) {
   const rankings = useMemo(() => {
-    return calculateRiskScoreByVehicle(eventos)
+    return computeVehicleRiskProfiles(eventos)
   }, [eventos])
 
   if (rankings.length === 0) {
@@ -82,32 +82,32 @@ export function RiskRankingVehicles({ eventos }: RiskRankingVehiclesProps) {
                   </TableCell>
                   <TableCell className="font-medium">{ranking.vehiculo}</TableCell>
                   <TableCell className="text-center">
-                    <span className="font-mono font-semibold">{ranking.score.toFixed(1)}</span>
+                    <span className="font-mono font-semibold">{ranking.score.score.toFixed(1)}</span>
                   </TableCell>
                   <TableCell className="text-center">
                     <Badge
-                      className={getRiskBadgeClassName(ranking.level)}
-                      variant={getRiskBadgeVariant(ranking.level)}
+                      className={getRiskBadgeClassName(ranking.score.level)}
+                      variant={getRiskBadgeVariant(ranking.score.level)}
                     >
-                      {ranking.level}
+                      {ranking.score.level}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-center">
                     {ranking.totalEventos.toLocaleString()}
                   </TableCell>
                   <TableCell className="text-center">
-                    {ranking.eventosFatiga > 0 ? (
-                      <span className="text-orange-600 font-medium">
-                        {ranking.eventosFatiga.toLocaleString()}
+                    {ranking.distribution.d1 > 0 ? (
+                      <span className="text-red-600 font-medium">
+                        {ranking.distribution.d1.toLocaleString()}
                       </span>
                     ) : (
                       <span className="text-muted-foreground">-</span>
                     )}
                   </TableCell>
                   <TableCell className="text-center">
-                    {ranking.eventosCriticos > 0 ? (
-                      <span className="text-destructive font-medium">
-                        {ranking.eventosCriticos.toLocaleString()}
+                    {ranking.distribution.d3 > 0 ? (
+                      <span className="text-orange-600 font-medium">
+                        {ranking.distribution.d3.toLocaleString()}
                       </span>
                     ) : (
                       <span className="text-muted-foreground">-</span>

@@ -3,11 +3,11 @@ import { Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer"
 import type { VehiculoEventosFile, VehiculoEvento } from "@/domains/vehiculo/types"
 import type { SecurityAlert } from "./securityAlerts"
 import {
-  calculateRiskScoreByOperator,
-  calculateRiskScoreByVehicle,
-  calculateRiskDriversByOperator,
-  calculateRiskDriversByVehicle,
-} from "./riskScoring"
+  computeOperatorRiskProfiles,
+  computeVehicleRiskProfiles,
+  countD1D3,
+  computeFactors,
+} from "./riskModel"
 
 interface VehiculoEventosPdfReportProps {
   data: VehiculoEventosFile[]
@@ -158,6 +158,11 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     color: "#1f2937",
   },
+  kpiSubtext: {
+    fontSize: 9,
+    color: "#9ca3af",
+    marginTop: 3,
+  },
   pageNumber: {
     position: "absolute",
     bottom: 30,
@@ -299,11 +304,10 @@ function getSeverityLabel(severity: SecurityAlert["severity"]): string {
   }
 }
 
-// Función para generar resumen ejecutivo interpretativo
+// Función para generar resumen ejecutivo interpretativo usando nuevo modelo
 function generarResumenEjecutivo(
-  totalEventos: number,
-  eventosFatiga: number,
-  eventosCriticos: number,
+  distribution: ReturnType<typeof countD1D3>,
+  factors: ReturnType<typeof computeFactors>,
   vehiculosUnicos: number,
   operadoresUnicos: number,
   allEventos: VehiculoEvento[],
@@ -311,55 +315,26 @@ function generarResumenEjecutivo(
 ): string {
   const partes: string[] = []
 
-  // Calcular porcentaje de eventos de fatiga
-  const porcentajeFatiga =
-    totalEventos > 0 ? Math.round((eventosFatiga / totalEventos) * 100) : 0
-
-  // Calcular franja horaria con más eventos
-  const franjas = [
-    { nombre: "00-06", inicio: 0, fin: 6 },
-    { nombre: "06-12", inicio: 6, fin: 12 },
-    { nombre: "12-18", inicio: 12, fin: 18 },
-    { nombre: "18-24", inicio: 18, fin: 24 },
-  ]
-
-  const conteoFranjas: Record<string, number> = {
-    "00-06": 0,
-    "06-12": 0,
-    "12-18": 0,
-    "18-24": 0,
-  }
-
-  allEventos.forEach((evento) => {
-    const hora = evento.fecha.getHours()
-    for (const franja of franjas) {
-      if (hora >= franja.inicio && hora < franja.fin) {
-        conteoFranjas[franja.nombre]++
-        break
-      }
-    }
-  })
-
-  const franjaMasEventos = Object.entries(conteoFranjas).reduce((a, b) =>
-    conteoFranjas[a[0]] > conteoFranjas[b[0]] ? a : b
-  )
-
-  // Primera parte: Total de eventos y predominio
-  if (totalEventos > 0) {
+  // Primera parte: Total de eventos y distribución D1/D3
+  if (distribution.total > 0) {
     partes.push(
-      `Durante el período analizado se registraron ${totalEventos.toLocaleString()} evento${totalEventos !== 1 ? "s" : ""}`
+      `Durante el período analizado se registraron ${distribution.total.toLocaleString()} evento${distribution.total !== 1 ? "s" : ""} de seguridad vial`
     )
 
-    if (eventosFatiga > 0 && porcentajeFatiga >= 50) {
+    if (distribution.d1 > 0 || distribution.d3 > 0) {
+      const eventosDesc: string[] = []
+      if (distribution.d1 > 0) {
+        eventosDesc.push(`${distribution.d1} de fatiga (D1)`)
+      }
+      if (distribution.d3 > 0) {
+        eventosDesc.push(`${distribution.d3} de distracción (D3)`)
+      }
+      partes.push(`(${eventosDesc.join(" y ")})`)
+    }
+
+    if (distribution.pctFatiga >= 50) {
       partes.push(
-        `con predominio de eventos de fatiga (${porcentajeFatiga}%)`
-      )
-    } else if (eventosCriticos > 0) {
-      const porcentajeCriticos = Math.round(
-        (eventosCriticos / totalEventos) * 100
-      )
-      partes.push(
-        `con ${porcentajeCriticos}% de eventos críticos de seguridad`
+        `con predominio de eventos de fatiga (${distribution.pctFatiga.toFixed(1)}%)`
       )
     }
   }
@@ -381,29 +356,26 @@ function generarResumenEjecutivo(
       partes.push(`Se detectó una alerta ${severidadTexto} de seguridad`)
     }
 
-    // Agregar contexto si hay reincidencia
-    if (operadoresUnicos < eventosCriticos / 2) {
-      partes.push("con reincidencia de eventos en operadores específicos")
+    // Agregar contexto si hay reincidencia (factor de severidad)
+    if (factors.reincidencia > 0) {
+      partes.push(`con ${factors.reincidencia} día${factors.reincidencia !== 1 ? "s" : ""} de reincidencia detectado${factors.reincidencia !== 1 ? "s" : ""}`)
     }
   }
 
-  // Tercera parte: Franja horaria
-  if (franjaMasEventos[1] > 0) {
-    const horaInicio = franjaMasEventos[0].split("-")[0]
-    const horaFin = franjaMasEventos[0].split("-")[1]
+  // Tercera parte: Franja horaria (factor de severidad)
+  if (factors.franjaDominante) {
+    const horaInicio = factors.franjaDominante.split("-")[0]
+    const horaFin = factors.franjaDominante.split("-")[1]
     partes.push(
-      `La mayor concentración de eventos ocurrió en la franja ${horaInicio}–${horaFin} h, lo que sugiere revisar turnos y descansos`
+      `La mayor concentración de eventos ocurrió en la franja ${horaInicio}–${horaFin} h (${factors.franjaCount} evento${factors.franjaCount !== 1 ? "s" : ""})`
     )
   }
 
-  // Cuarta parte: Contexto adicional si aplica
-  if (vehiculosUnicos > 0 && operadoresUnicos > 0) {
-    const ratioEventosPorOperador = totalEventos / operadoresUnicos
-    if (ratioEventosPorOperador > 5) {
-      partes.push(
-        `Se observa una alta concentración de eventos por operador, recomendando capacitación adicional`
-      )
-    }
+  // Cuarta parte: Factores de severidad adicionales
+  if (factors.altaVelocidad > 0) {
+    partes.push(
+      `Se registraron ${factors.altaVelocidad} evento${factors.altaVelocidad !== 1 ? "s" : ""} con velocidad mayor o igual a 80 km/h`
+    )
   }
 
   return partes.join(". ") + "."
@@ -445,18 +417,12 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
     file.tiposEvento.forEach((tipo) => tiposEvento.add(tipo))
   })
 
-  // Calcular KPIs ejecutivos (mismos que en la UI)
+  // Calcular KPIs ejecutivos usando nuevo modelo
   const allEventos = data.flatMap((file) => file.eventos)
   
-  // Eventos críticos (D1 o D3)
-  const eventosCriticos = allEventos.filter(
-    (e) => e.evento?.trim() === "D1" || e.evento?.trim() === "D3"
-  ).length
-
-  // Eventos de fatiga (D1)
-  const eventosFatiga = allEventos.filter(
-    (e) => e.evento?.trim() === "D1"
-  ).length
+  // Distribución de eventos reales (D1/D3)
+  const distribution = countD1D3(allEventos)
+  const factors = computeFactors(allEventos)
 
   // Vehículos únicos
   const vehiculosUnicos = new Set(
@@ -480,32 +446,29 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
 
   const alertStyles = getAlertStyles(securityAlert.severity)
 
-  // Generar resumen ejecutivo interpretativo
+  // Generar resumen ejecutivo interpretativo usando nuevo modelo
   const resumenEjecutivoTexto = generarResumenEjecutivo(
-    totalEventos,
-    eventosFatiga,
-    eventosCriticos,
+    distribution,
+    factors,
     vehiculosUnicos,
     operadoresUnicos,
     allEventos,
     securityAlert
   )
 
-  // Calcular rankings y drivers para modo executive
-  const operadoresScores = mode === "executive" ? calculateRiskScoreByOperator(allEventos) : []
-  const vehiculosScores = mode === "executive" ? calculateRiskScoreByVehicle(allEventos) : []
-  const operadoresDrivers = mode === "executive" ? calculateRiskDriversByOperator(allEventos) : []
-  const vehiculosDrivers = mode === "executive" ? calculateRiskDriversByVehicle(allEventos) : []
+  // Calcular rankings usando nuevo modelo para modo executive
+  const operadoresProfiles = mode === "executive" ? computeOperatorRiskProfiles(allEventos) : []
+  const vehiculosProfiles = mode === "executive" ? computeVehicleRiskProfiles(allEventos) : []
 
   // Top 3 operadores y vehículos críticos
-  const top3Operadores = operadoresScores
-    .filter((op) => op.level === "HIGH" && op.score > 50)
+  const top3Operadores = operadoresProfiles
+    .filter((op) => op.score.level === "HIGH" && op.score.score > 50)
     .slice(0, 3)
-  const top3Vehiculos = vehiculosScores
-    .filter((veh) => veh.level === "HIGH" && veh.score > 50)
+  const top3Vehiculos = vehiculosProfiles
+    .filter((veh) => veh.score.level === "HIGH" && veh.score.score > 50)
     .slice(0, 3)
 
-  // Calcular eventos por tipo y franja horaria para gráficos
+  // Calcular eventos por tipo (solo D1 y D3) y franja horaria para gráficos
   const eventosPorTipo: Record<string, number> = {}
   const eventosPorFranja: Record<string, number> = {
     "00-06": 0,
@@ -515,11 +478,13 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
   }
 
   allEventos.forEach((evento) => {
-    // Por tipo
-    const tipo = evento.evento?.trim() || "Desconocido"
-    eventosPorTipo[tipo] = (eventosPorTipo[tipo] || 0) + 1
+    // Por tipo (solo D1 y D3)
+    const tipo = evento.evento?.trim()
+    if (tipo === "D1" || tipo === "D3") {
+      eventosPorTipo[tipo] = (eventosPorTipo[tipo] || 0) + 1
+    }
 
-    // Por franja
+    // Por franja (para visualización, no como evento)
     const hora = evento.fecha.getHours()
     if (hora >= 0 && hora < 6) eventosPorFranja["00-06"]++
     else if (hora >= 6 && hora < 12) eventosPorFranja["06-12"]++
@@ -527,10 +492,10 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
     else if (hora >= 18 && hora < 24) eventosPorFranja["18-24"]++
   })
 
-  // Generar recomendaciones basadas en los datos
+  // Generar recomendaciones basadas en los datos reales
   const recomendaciones: string[] = []
-  if (eventosFatiga > totalEventos * 0.5) {
-    recomendaciones.push("Revisar políticas de turnos y descansos debido a alta incidencia de eventos de fatiga")
+  if (distribution.pctFatiga >= 50) {
+    recomendaciones.push(`Revisar políticas de turnos y descansos debido a alta incidencia de eventos de fatiga (${distribution.pctFatiga.toFixed(1)}%)`)
   }
   if (top3Operadores.length > 0) {
     recomendaciones.push(`Capacitar a los operadores ${top3Operadores.map((o) => o.operador).join(", ")} en prevención de riesgos`)
@@ -616,15 +581,18 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
             <View style={styles.kpiGrid}>
               <View style={styles.kpiCard}>
                 <Text style={styles.kpiLabel}>Total de Eventos</Text>
-                <Text style={styles.kpiValue}>{totalEventos.toLocaleString()}</Text>
+                <Text style={styles.kpiValue}>{distribution.total.toLocaleString()}</Text>
+                <Text style={styles.kpiSubtext}>D1 + D3</Text>
               </View>
               <View style={styles.kpiCard}>
-                <Text style={styles.kpiLabel}>Eventos Críticos</Text>
-                <Text style={styles.kpiValue}>{eventosCriticos.toLocaleString()}</Text>
+                <Text style={styles.kpiLabel}>Fatiga (D1)</Text>
+                <Text style={styles.kpiValue}>{distribution.d1.toLocaleString()}</Text>
+                <Text style={styles.kpiSubtext}>{distribution.pctFatiga.toFixed(1)}%</Text>
               </View>
               <View style={styles.kpiCard}>
-                <Text style={styles.kpiLabel}>Eventos de Fatiga</Text>
-                <Text style={styles.kpiValue}>{eventosFatiga.toLocaleString()}</Text>
+                <Text style={styles.kpiLabel}>Distracción (D3)</Text>
+                <Text style={styles.kpiValue}>{distribution.d3.toLocaleString()}</Text>
+                <Text style={styles.kpiSubtext}>{distribution.pctDistraccion.toFixed(1)}%</Text>
               </View>
               <View style={styles.kpiCard}>
                 <Text style={styles.kpiLabel}>Vehículos Únicos</Text>
@@ -661,7 +629,7 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
                           #{idx + 1} - {op.operador}
                         </Text>
                         <Text style={{ fontSize: 9, color: "#374151" }}>
-                          Score: {op.score.toFixed(1)} • Eventos: {op.totalEventos} • Fatiga: {op.eventosFatiga}
+                          Score: {op.score.score.toFixed(1)} ({op.score.level}) • Eventos: {op.totalEventos} • Fatiga (D1): {op.distribution.d1} • Distracción (D3): {op.distribution.d3}
                         </Text>
                       </View>
                     ))}
@@ -677,7 +645,7 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
                           #{idx + 1} - {veh.vehiculo}
                         </Text>
                         <Text style={{ fontSize: 9, color: "#374151" }}>
-                          Score: {veh.score.toFixed(1)} • Eventos: {veh.totalEventos} • Críticos: {veh.eventosCriticos}
+                          Score: {veh.score.score.toFixed(1)} ({veh.score.level}) • Eventos: {veh.totalEventos} • Fatiga (D1): {veh.distribution.d1} • Distracción (D3): {veh.distribution.d3}
                         </Text>
                       </View>
                     ))}
@@ -700,100 +668,142 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
               {top3Operadores.length > 0 && (
                 <>
                   <Text style={styles.subsectionTitle}>Operadores</Text>
-                  {top3Operadores.map((op) => {
-                    const drivers = operadoresDrivers.find((d) => d.operador === op.operador)
-                    if (!drivers) return null
-                    return (
-                      <View key={op.operador} style={{ marginBottom: 12 }}>
-                        <Text style={{ fontSize: 10, fontWeight: "bold", marginBottom: 4 }}>
-                          {op.operador}
+                  {top3Operadores.map((op) => (
+                    <View key={op.operador} style={{ marginBottom: 12 }}>
+                      <Text style={{ fontSize: 10, fontWeight: "bold", marginBottom: 4 }}>
+                        {op.operador}
+                      </Text>
+                      {/* Distribución de eventos (D1/D3) */}
+                      <View style={{ marginBottom: 6 }}>
+                        <Text style={{ fontSize: 8, color: "#6b7280", marginBottom: 2 }}>
+                          Distribución de eventos:
                         </Text>
-                        {drivers.drivers.fatigaPct > 0 && (
-                          <View style={{ marginBottom: 4 }}>
-                            <Text style={{ fontSize: 8, color: "#6b7280" }}>
-                              Fatiga: {drivers.drivers.fatigaPct.toFixed(1)}%
-                            </Text>
+                        {op.distribution.d1 > 0 && (
+                          <View style={{ marginBottom: 2 }}>
+                            <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 2 }}>
+                              <Text style={{ fontSize: 8, color: "#6b7280" }}>Fatiga (D1):</Text>
+                              <Text style={{ fontSize: 8, fontWeight: "bold", color: "#dc2626" }}>
+                                {op.distribution.d1} ({op.distribution.pctFatiga.toFixed(1)}%)
+                              </Text>
+                            </View>
                             <View style={[styles.driverBar, { backgroundColor: "#fee2e2", width: "100%" }]}>
-                              <View style={{ height: 6, backgroundColor: "#dc2626", width: `${drivers.drivers.fatigaPct}%` }} />
+                              <View style={{ height: 6, backgroundColor: "#dc2626", width: `${op.distribution.pctFatiga}%` }} />
                             </View>
                           </View>
                         )}
-                        {drivers.drivers.velocidadPct > 0 && (
-                          <View style={{ marginBottom: 4 }}>
-                            <Text style={{ fontSize: 8, color: "#6b7280" }}>
-                              Velocidad: {drivers.drivers.velocidadPct.toFixed(1)}%
-                            </Text>
+                        {op.distribution.d3 > 0 && (
+                          <View style={{ marginBottom: 2 }}>
+                            <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 2 }}>
+                              <Text style={{ fontSize: 8, color: "#6b7280" }}>Distracción (D3):</Text>
+                              <Text style={{ fontSize: 8, fontWeight: "bold", color: "#ea580c" }}>
+                                {op.distribution.d3} ({op.distribution.pctDistraccion.toFixed(1)}%)
+                              </Text>
+                            </View>
                             <View style={[styles.driverBar, { backgroundColor: "#ffedd5", width: "100%" }]}>
-                              <View style={{ height: 6, backgroundColor: "#ea580c", width: `${drivers.drivers.velocidadPct}%` }} />
-                            </View>
-                          </View>
-                        )}
-                        {drivers.drivers.reincidenciaPct > 0 && (
-                          <View style={{ marginBottom: 4 }}>
-                            <Text style={{ fontSize: 8, color: "#6b7280" }}>
-                              Reincidencia: {drivers.drivers.reincidenciaPct.toFixed(1)}%
-                            </Text>
-                            <View style={[styles.driverBar, { backgroundColor: "#fef9c3", width: "100%" }]}>
-                              <View style={{ height: 6, backgroundColor: "#eab308", width: `${drivers.drivers.reincidenciaPct}%` }} />
+                              <View style={{ height: 6, backgroundColor: "#ea580c", width: `${op.distribution.pctDistraccion}%` }} />
                             </View>
                           </View>
                         )}
                       </View>
-                    )
-                  })}
+                      {/* Factores de severidad */}
+                      {(op.factors.altaVelocidad > 0 || op.factors.reincidencia > 0 || op.factors.franjaDominante) && (
+                        <View style={{ marginTop: 4, paddingTop: 4, borderTopWidth: 1, borderTopColor: "#e5e7eb" }}>
+                          <Text style={{ fontSize: 8, color: "#6b7280", marginBottom: 2 }}>
+                            Factores de riesgo:
+                          </Text>
+                          {op.factors.altaVelocidad > 0 && (
+                            <Text style={{ fontSize: 8, color: "#6b7280" }}>
+                              • Alta velocidad: {op.factors.altaVelocidad} evento{op.factors.altaVelocidad !== 1 ? "s" : ""}
+                            </Text>
+                          )}
+                          {op.factors.reincidencia > 0 && (
+                            <Text style={{ fontSize: 8, color: "#6b7280" }}>
+                              • Reincidencia: {op.factors.reincidencia} día{op.factors.reincidencia !== 1 ? "s" : ""} crítico{op.factors.reincidencia !== 1 ? "s" : ""}
+                            </Text>
+                          )}
+                          {op.factors.franjaDominante && (
+                            <Text style={{ fontSize: 8, color: "#6b7280" }}>
+                              • Franja dominante: {op.factors.franjaDominante}h ({op.factors.franjaCount} evento{op.factors.franjaCount !== 1 ? "s" : ""})
+                            </Text>
+                          )}
+                        </View>
+                      )}
+                    </View>
+                  ))}
                 </>
               )}
 
               {top3Vehiculos.length > 0 && (
                 <>
                   <Text style={[styles.subsectionTitle, { marginTop: 12 }]}>Vehículos</Text>
-                  {top3Vehiculos.map((veh) => {
-                    const drivers = vehiculosDrivers.find((d) => d.vehiculo === veh.vehiculo)
-                    if (!drivers) return null
-                    return (
-                      <View key={veh.vehiculo} style={{ marginBottom: 12 }}>
-                        <Text style={{ fontSize: 10, fontWeight: "bold", marginBottom: 4 }}>
-                          {veh.vehiculo}
+                  {top3Vehiculos.map((veh) => (
+                    <View key={veh.vehiculo} style={{ marginBottom: 12 }}>
+                      <Text style={{ fontSize: 10, fontWeight: "bold", marginBottom: 4 }}>
+                        {veh.vehiculo}
+                      </Text>
+                      {/* Distribución de eventos (D1/D3) */}
+                      <View style={{ marginBottom: 6 }}>
+                        <Text style={{ fontSize: 8, color: "#6b7280", marginBottom: 2 }}>
+                          Distribución de eventos:
                         </Text>
-                        {drivers.drivers.fatigaPct > 0 && (
-                          <View style={{ marginBottom: 4 }}>
-                            <Text style={{ fontSize: 8, color: "#6b7280" }}>
-                              Fatiga: {drivers.drivers.fatigaPct.toFixed(1)}%
-                            </Text>
+                        {veh.distribution.d1 > 0 && (
+                          <View style={{ marginBottom: 2 }}>
+                            <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 2 }}>
+                              <Text style={{ fontSize: 8, color: "#6b7280" }}>Fatiga (D1):</Text>
+                              <Text style={{ fontSize: 8, fontWeight: "bold", color: "#dc2626" }}>
+                                {veh.distribution.d1} ({veh.distribution.pctFatiga.toFixed(1)}%)
+                              </Text>
+                            </View>
                             <View style={[styles.driverBar, { backgroundColor: "#fee2e2", width: "100%" }]}>
-                              <View style={{ height: 6, backgroundColor: "#dc2626", width: `${drivers.drivers.fatigaPct}%` }} />
+                              <View style={{ height: 6, backgroundColor: "#dc2626", width: `${veh.distribution.pctFatiga}%` }} />
                             </View>
                           </View>
                         )}
-                        {drivers.drivers.velocidadPct > 0 && (
-                          <View style={{ marginBottom: 4 }}>
-                            <Text style={{ fontSize: 8, color: "#6b7280" }}>
-                              Velocidad: {drivers.drivers.velocidadPct.toFixed(1)}%
-                            </Text>
+                        {veh.distribution.d3 > 0 && (
+                          <View style={{ marginBottom: 2 }}>
+                            <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 2 }}>
+                              <Text style={{ fontSize: 8, color: "#6b7280" }}>Distracción (D3):</Text>
+                              <Text style={{ fontSize: 8, fontWeight: "bold", color: "#ea580c" }}>
+                                {veh.distribution.d3} ({veh.distribution.pctDistraccion.toFixed(1)}%)
+                              </Text>
+                            </View>
                             <View style={[styles.driverBar, { backgroundColor: "#ffedd5", width: "100%" }]}>
-                              <View style={{ height: 6, backgroundColor: "#ea580c", width: `${drivers.drivers.velocidadPct}%` }} />
-                            </View>
-                          </View>
-                        )}
-                        {drivers.drivers.reincidenciaPct > 0 && (
-                          <View style={{ marginBottom: 4 }}>
-                            <Text style={{ fontSize: 8, color: "#6b7280" }}>
-                              Reincidencia: {drivers.drivers.reincidenciaPct.toFixed(1)}%
-                            </Text>
-                            <View style={[styles.driverBar, { backgroundColor: "#fef9c3", width: "100%" }]}>
-                              <View style={{ height: 6, backgroundColor: "#eab308", width: `${drivers.drivers.reincidenciaPct}%` }} />
+                              <View style={{ height: 6, backgroundColor: "#ea580c", width: `${veh.distribution.pctDistraccion}%` }} />
                             </View>
                           </View>
                         )}
                       </View>
-                    )
-                  })}
+                      {/* Factores de severidad */}
+                      {(veh.factors.altaVelocidad > 0 || veh.factors.reincidencia > 0 || veh.factors.franjaDominante) && (
+                        <View style={{ marginTop: 4, paddingTop: 4, borderTopWidth: 1, borderTopColor: "#e5e7eb" }}>
+                          <Text style={{ fontSize: 8, color: "#6b7280", marginBottom: 2 }}>
+                            Factores de riesgo:
+                          </Text>
+                          {veh.factors.altaVelocidad > 0 && (
+                            <Text style={{ fontSize: 8, color: "#6b7280" }}>
+                              • Alta velocidad: {veh.factors.altaVelocidad} evento{veh.factors.altaVelocidad !== 1 ? "s" : ""}
+                            </Text>
+                          )}
+                          {veh.factors.reincidencia > 0 && (
+                            <Text style={{ fontSize: 8, color: "#6b7280" }}>
+                              • Reincidencia: {veh.factors.reincidencia} día{veh.factors.reincidencia !== 1 ? "s" : ""} crítico{veh.factors.reincidencia !== 1 ? "s" : ""}
+                            </Text>
+                          )}
+                          {veh.factors.franjaDominante && (
+                            <Text style={{ fontSize: 8, color: "#6b7280" }}>
+                              • Franja dominante: {veh.factors.franjaDominante}h ({veh.factors.franjaCount} evento{veh.factors.franjaCount !== 1 ? "s" : ""})
+                            </Text>
+                          )}
+                        </View>
+                      )}
+                    </View>
+                  ))}
                 </>
               )}
             </View>
 
             {/* Separador visual - solo si hay rankings para mostrar */}
-            {(operadoresScores.length > 0 || vehiculosScores.length > 0) && (
+            {(operadoresProfiles.length > 0 || vehiculosProfiles.length > 0) && (
               <>
                 <View style={styles.sectionDivider} />
 
@@ -801,11 +811,11 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
                 <View wrap={false}>
                   <Text style={styles.sectionTitle}>RANKINGS DE RIESGO</Text>
                   
-                  {operadoresScores.length > 0 && (
+                  {operadoresProfiles.length > 0 && (
                     <>
                       <Text style={styles.subsectionTitle}>Top 10 Operadores por Score de Riesgo</Text>
                       <View style={{ marginBottom: 15 }}>
-                        {operadoresScores.slice(0, 10).map((op, idx) => (
+                        {operadoresProfiles.slice(0, 10).map((op, idx) => (
                           <View
                             key={op.operador}
                             style={{
@@ -814,9 +824,9 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
                               paddingVertical: 5,
                               paddingHorizontal: 8,
                               backgroundColor: idx % 2 === 0 ? "#f9fafb" : "#ffffff",
-                              borderLeftWidth: op.level === "HIGH" ? 3 : op.level === "MEDIUM" ? 2 : 1,
+                              borderLeftWidth: op.score.level === "HIGH" ? 3 : op.score.level === "MEDIUM" ? 2 : 1,
                               borderLeftColor:
-                                op.level === "HIGH" ? "#dc2626" : op.level === "MEDIUM" ? "#eab308" : "#22c55e",
+                                op.score.level === "HIGH" ? "#dc2626" : op.score.level === "MEDIUM" ? "#eab308" : "#22c55e",
                               marginBottom: 2,
                             }}
                           >
@@ -824,24 +834,24 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
                               <Text style={{ fontSize: 9, color: "#6b7280", width: 25 }}>
                                 #{idx + 1}
                               </Text>
-                              <Text style={{ fontSize: 9, fontWeight: op.level === "HIGH" ? "bold" : "normal", flex: 1 }}>
+                              <Text style={{ fontSize: 9, fontWeight: op.score.level === "HIGH" ? "bold" : "normal", flex: 1 }}>
                                 {op.operador}
                               </Text>
                             </View>
                             <View style={{ flexDirection: "row", gap: 10 }}>
                               <Text style={{ fontSize: 9, color: "#6b7280", width: 40 }}>
-                                Score: {op.score.toFixed(1)}
+                                Score: {op.score.score.toFixed(1)}
                               </Text>
                               <Text
                                 style={{
                                   fontSize: 9,
                                   color:
-                                    op.level === "HIGH" ? "#dc2626" : op.level === "MEDIUM" ? "#eab308" : "#22c55e",
+                                    op.score.level === "HIGH" ? "#dc2626" : op.score.level === "MEDIUM" ? "#eab308" : "#22c55e",
                                   fontWeight: "bold",
                                   width: 50,
                                 }}
                               >
-                                {op.level}
+                                {op.score.level}
                               </Text>
                             </View>
                           </View>
@@ -850,11 +860,11 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
                     </>
                   )}
 
-                  {vehiculosScores.length > 0 && (
+                  {vehiculosProfiles.length > 0 && (
                     <>
                       <Text style={[styles.subsectionTitle, { marginTop: 10 }]}>Top 10 Vehículos por Score de Riesgo</Text>
                       <View>
-                        {vehiculosScores.slice(0, 10).map((veh, idx) => (
+                        {vehiculosProfiles.slice(0, 10).map((veh, idx) => (
                           <View
                             key={veh.vehiculo}
                             style={{
@@ -863,9 +873,9 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
                               paddingVertical: 5,
                               paddingHorizontal: 8,
                               backgroundColor: idx % 2 === 0 ? "#f9fafb" : "#ffffff",
-                              borderLeftWidth: veh.level === "HIGH" ? 3 : veh.level === "MEDIUM" ? 2 : 1,
+                              borderLeftWidth: veh.score.level === "HIGH" ? 3 : veh.score.level === "MEDIUM" ? 2 : 1,
                               borderLeftColor:
-                                veh.level === "HIGH" ? "#dc2626" : veh.level === "MEDIUM" ? "#eab308" : "#22c55e",
+                                veh.score.level === "HIGH" ? "#dc2626" : veh.score.level === "MEDIUM" ? "#eab308" : "#22c55e",
                               marginBottom: 2,
                             }}
                           >
@@ -873,24 +883,24 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
                               <Text style={{ fontSize: 9, color: "#6b7280", width: 25 }}>
                                 #{idx + 1}
                               </Text>
-                              <Text style={{ fontSize: 9, fontWeight: veh.level === "HIGH" ? "bold" : "normal", flex: 1 }}>
+                              <Text style={{ fontSize: 9, fontWeight: veh.score.level === "HIGH" ? "bold" : "normal", flex: 1 }}>
                                 {veh.vehiculo}
                               </Text>
                             </View>
                             <View style={{ flexDirection: "row", gap: 10 }}>
                               <Text style={{ fontSize: 9, color: "#6b7280", width: 40 }}>
-                                Score: {veh.score.toFixed(1)}
+                                Score: {veh.score.score.toFixed(1)}
                               </Text>
                               <Text
                                 style={{
                                   fontSize: 9,
                                   color:
-                                    veh.level === "HIGH" ? "#dc2626" : veh.level === "MEDIUM" ? "#eab308" : "#22c55e",
+                                    veh.score.level === "HIGH" ? "#dc2626" : veh.score.level === "MEDIUM" ? "#eab308" : "#22c55e",
                                   fontWeight: "bold",
                                   width: 50,
                                 }}
                               >
-                                {veh.level}
+                                {veh.score.level}
                               </Text>
                             </View>
                           </View>
@@ -907,16 +917,16 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
         )}
 
         {/* 5. Rankings Resumidos (página propia si no entraron en la anterior) */}
-        {((top3Operadores.length === 0 && top3Vehiculos.length === 0) && (operadoresScores.length > 0 || vehiculosScores.length > 0)) && (
+        {((top3Operadores.length === 0 && top3Vehiculos.length === 0) && (operadoresProfiles.length > 0 || vehiculosProfiles.length > 0)) && (
           <Page size="A4" style={styles.page}>
             <View wrap={false} style={styles.section}>
               <Text style={styles.sectionTitle}>RANKINGS DE RIESGO</Text>
               
-              {operadoresScores.length > 0 && (
+              {operadoresProfiles.length > 0 && (
                 <>
                   <Text style={styles.subsectionTitle}>Top 10 Operadores por Score de Riesgo</Text>
                   <View style={{ marginBottom: 15 }}>
-                    {operadoresScores.slice(0, 10).map((op, idx) => (
+                    {operadoresProfiles.slice(0, 10).map((op, idx) => (
                       <View
                         key={op.operador}
                         style={{
@@ -925,9 +935,9 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
                           paddingVertical: 5,
                           paddingHorizontal: 8,
                           backgroundColor: idx % 2 === 0 ? "#f9fafb" : "#ffffff",
-                          borderLeftWidth: op.level === "HIGH" ? 3 : op.level === "MEDIUM" ? 2 : 1,
+                          borderLeftWidth: op.score.level === "HIGH" ? 3 : op.score.level === "MEDIUM" ? 2 : 1,
                           borderLeftColor:
-                            op.level === "HIGH" ? "#dc2626" : op.level === "MEDIUM" ? "#eab308" : "#22c55e",
+                            op.score.level === "HIGH" ? "#dc2626" : op.score.level === "MEDIUM" ? "#eab308" : "#22c55e",
                           marginBottom: 2,
                         }}
                       >
@@ -935,24 +945,24 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
                           <Text style={{ fontSize: 9, color: "#6b7280", width: 25 }}>
                             #{idx + 1}
                           </Text>
-                          <Text style={{ fontSize: 9, fontWeight: op.level === "HIGH" ? "bold" : "normal", flex: 1 }}>
+                          <Text style={{ fontSize: 9, fontWeight: op.score.level === "HIGH" ? "bold" : "normal", flex: 1 }}>
                             {op.operador}
                           </Text>
                         </View>
                         <View style={{ flexDirection: "row", gap: 10 }}>
                           <Text style={{ fontSize: 9, color: "#6b7280", width: 40 }}>
-                            Score: {op.score.toFixed(1)}
+                            Score: {op.score.score.toFixed(1)}
                           </Text>
                           <Text
                             style={{
                               fontSize: 9,
                               color:
-                                op.level === "HIGH" ? "#dc2626" : op.level === "MEDIUM" ? "#eab308" : "#22c55e",
+                                op.score.level === "HIGH" ? "#dc2626" : op.score.level === "MEDIUM" ? "#eab308" : "#22c55e",
                               fontWeight: "bold",
                               width: 50,
                             }}
                           >
-                            {op.level}
+                            {op.score.level}
                           </Text>
                         </View>
                       </View>
@@ -961,11 +971,11 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
                 </>
               )}
 
-              {vehiculosScores.length > 0 && (
+              {vehiculosProfiles.length > 0 && (
                 <>
                   <Text style={[styles.subsectionTitle, { marginTop: 10 }]}>Top 10 Vehículos por Score de Riesgo</Text>
                   <View>
-                    {vehiculosScores.slice(0, 10).map((veh, idx) => (
+                    {vehiculosProfiles.slice(0, 10).map((veh, idx) => (
                       <View
                         key={veh.vehiculo}
                         style={{
@@ -974,9 +984,9 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
                           paddingVertical: 5,
                           paddingHorizontal: 8,
                           backgroundColor: idx % 2 === 0 ? "#f9fafb" : "#ffffff",
-                          borderLeftWidth: veh.level === "HIGH" ? 3 : veh.level === "MEDIUM" ? 2 : 1,
+                          borderLeftWidth: veh.score.level === "HIGH" ? 3 : veh.score.level === "MEDIUM" ? 2 : 1,
                           borderLeftColor:
-                            veh.level === "HIGH" ? "#dc2626" : veh.level === "MEDIUM" ? "#eab308" : "#22c55e",
+                            veh.score.level === "HIGH" ? "#dc2626" : veh.score.level === "MEDIUM" ? "#eab308" : "#22c55e",
                           marginBottom: 2,
                         }}
                       >
@@ -984,24 +994,24 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
                           <Text style={{ fontSize: 9, color: "#6b7280", width: 25 }}>
                             #{idx + 1}
                           </Text>
-                          <Text style={{ fontSize: 9, fontWeight: veh.level === "HIGH" ? "bold" : "normal", flex: 1 }}>
+                          <Text style={{ fontSize: 9, fontWeight: veh.score.level === "HIGH" ? "bold" : "normal", flex: 1 }}>
                             {veh.vehiculo}
                           </Text>
                         </View>
                         <View style={{ flexDirection: "row", gap: 10 }}>
                           <Text style={{ fontSize: 9, color: "#6b7280", width: 40 }}>
-                            Score: {veh.score.toFixed(1)}
+                            Score: {veh.score.score.toFixed(1)}
                           </Text>
                           <Text
                             style={{
                               fontSize: 9,
                               color:
-                                veh.level === "HIGH" ? "#dc2626" : veh.level === "MEDIUM" ? "#eab308" : "#22c55e",
+                                veh.score.level === "HIGH" ? "#dc2626" : veh.score.level === "MEDIUM" ? "#eab308" : "#22c55e",
                               fontWeight: "bold",
                               width: 50,
                             }}
                           >
-                            {veh.level}
+                            {veh.score.level}
                           </Text>
                         </View>
                       </View>
@@ -1021,26 +1031,47 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
             <Text style={styles.sectionTitle}>ANÁLISIS DE CONTEXTO</Text>
             
             <Text style={styles.subsectionTitle}>Distribución por Tipo de Evento</Text>
-            {Object.entries(eventosPorTipo).map(([tipo, cantidad]) => (
-              <View key={tipo} style={{ marginBottom: 8 }}>
+            {distribution.d1 > 0 && (
+              <View style={{ marginBottom: 8 }}>
                 <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 3 }}>
-                  <Text style={{ fontSize: 10 }}>{tipo}</Text>
-                  <Text style={{ fontSize: 10, fontWeight: "bold" }}>{cantidad}</Text>
+                  <Text style={{ fontSize: 10 }}>Fatiga (D1)</Text>
+                  <Text style={{ fontSize: 10, fontWeight: "bold" }}>{distribution.d1}</Text>
                 </View>
                 <View style={{ height: 6, backgroundColor: "#e5e7eb", borderRadius: 2 }}>
                   <View
                     style={{
                       height: 6,
-                      backgroundColor: tipo === "D1" ? "#dc2626" : tipo === "D3" ? "#ea580c" : "#6b7280",
-                      width: `${(cantidad / totalEventos) * 100}%`,
+                      backgroundColor: "#dc2626",
+                      width: `${distribution.total > 0 ? (distribution.d1 / distribution.total) * 100 : 0}%`,
                       borderRadius: 2,
                     }}
                   />
                 </View>
               </View>
-            ))}
+            )}
+            {distribution.d3 > 0 && (
+              <View style={{ marginBottom: 8 }}>
+                <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 3 }}>
+                  <Text style={{ fontSize: 10 }}>Distracción (D3)</Text>
+                  <Text style={{ fontSize: 10, fontWeight: "bold" }}>{distribution.d3}</Text>
+                </View>
+                <View style={{ height: 6, backgroundColor: "#e5e7eb", borderRadius: 2 }}>
+                  <View
+                    style={{
+                      height: 6,
+                      backgroundColor: "#ea580c",
+                      width: `${distribution.total > 0 ? (distribution.d3 / distribution.total) * 100 : 0}%`,
+                      borderRadius: 2,
+                    }}
+                  />
+                </View>
+              </View>
+            )}
 
             <Text style={[styles.subsectionTitle, { marginTop: 15 }]}>Distribución por Franja Horaria</Text>
+            <Text style={{ fontSize: 9, color: "#6b7280", marginBottom: 8, fontStyle: "italic" }}>
+              (Factor de severidad - no es un tipo de evento)
+            </Text>
             {Object.entries(eventosPorFranja).map(([franja, cantidad]) => (
               <View key={franja} style={{ marginBottom: 8 }}>
                 <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 3 }}>
@@ -1051,8 +1082,8 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
                   <View
                     style={{
                       height: 6,
-                      backgroundColor: "#3b82f6",
-                      width: `${totalEventos > 0 ? (cantidad / totalEventos) * 100 : 0}%`,
+                      backgroundColor: franja === factors.franjaDominante ? "#dc2626" : "#3b82f6",
+                      width: `${distribution.total > 0 ? (cantidad / distribution.total) * 100 : 0}%`,
                       borderRadius: 2,
                     }}
                   />
@@ -1150,11 +1181,18 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
           <View style={styles.kpiGrid}>
             <View style={styles.kpiCard}>
               <Text style={styles.kpiLabel}>Total de Eventos</Text>
-              <Text style={styles.kpiValue}>{totalEventos.toLocaleString()}</Text>
+              <Text style={styles.kpiValue}>{distribution.total.toLocaleString()}</Text>
+              <Text style={[styles.kpiLabel, { fontSize: 9, marginTop: 3 }]}>D1 + D3</Text>
             </View>
             <View style={styles.kpiCard}>
-              <Text style={styles.kpiLabel}>Eventos de Fatiga</Text>
-              <Text style={styles.kpiValue}>{eventosFatiga.toLocaleString()}</Text>
+              <Text style={styles.kpiLabel}>Fatiga (D1)</Text>
+              <Text style={styles.kpiValue}>{distribution.d1.toLocaleString()}</Text>
+              <Text style={[styles.kpiLabel, { fontSize: 9, marginTop: 3 }]}>{distribution.pctFatiga.toFixed(1)}%</Text>
+            </View>
+            <View style={styles.kpiCard}>
+              <Text style={styles.kpiLabel}>Distracción (D3)</Text>
+              <Text style={styles.kpiValue}>{distribution.d3.toLocaleString()}</Text>
+              <Text style={[styles.kpiLabel, { fontSize: 9, marginTop: 3 }]}>{distribution.pctDistraccion.toFixed(1)}%</Text>
             </View>
             <View style={styles.kpiCard}>
               <Text style={styles.kpiLabel}>Vehículos Únicos</Text>
@@ -1164,13 +1202,33 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
               <Text style={styles.kpiLabel}>Operadores Únicos</Text>
               <Text style={styles.kpiValue}>{operadoresUnicos.toLocaleString()}</Text>
             </View>
-            {velocidadMaxima > 0 && (
-              <View style={styles.kpiCard}>
-                <Text style={styles.kpiLabel}>Velocidad Máxima</Text>
-                <Text style={styles.kpiValue}>{velocidadMaxima.toLocaleString()} km/h</Text>
-              </View>
-            )}
           </View>
+          
+          {/* Factores de Riesgo */}
+          {(factors.altaVelocidad > 0 || factors.reincidencia > 0 || factors.franjaDominante) && (
+            <View style={{ marginTop: 15, padding: 12, backgroundColor: "#fffbeb", borderRadius: 4 }}>
+              <Text style={{ fontSize: 11, fontWeight: "bold", color: "#78350f", marginBottom: 6 }}>
+                Factores de Riesgo Detectados:
+              </Text>
+              <View style={{ gap: 4 }}>
+                {factors.altaVelocidad > 0 && (
+                  <Text style={{ fontSize: 9, color: "#78350f" }}>
+                    • Alta velocidad: {factors.altaVelocidad} evento{factors.altaVelocidad !== 1 ? "s" : ""} con velocidad {">="} 80 km/h
+                  </Text>
+                )}
+                {factors.reincidencia > 0 && (
+                  <Text style={{ fontSize: 9, color: "#78350f" }}>
+                    • Reincidencia: {factors.reincidencia} día{factors.reincidencia !== 1 ? "s" : ""} con {">="} 3 eventos
+                  </Text>
+                )}
+                {factors.franjaDominante && (
+                  <Text style={{ fontSize: 9, color: "#78350f" }}>
+                    • Franja dominante: {factors.franjaDominante}h ({factors.franjaCount} evento{factors.franjaCount !== 1 ? "s" : ""})
+                  </Text>
+                )}
+              </View>
+            </View>
+          )}
         </View>
 
         <PdfFooter />
@@ -1183,10 +1241,9 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
 
           <Text style={styles.subsectionTitle}>Resumen Ejecutivo</Text>
           <Text style={styles.text}>
-            El análisis de eventos vehiculares muestra un total de {totalEventos.toLocaleString()} eventos
+            El análisis de eventos vehiculares muestra un total de {distribution.total.toLocaleString()} eventos
             registrados en {data.length} archivo{data.length !== 1 ? "s" : ""} procesado{data.length !== 1 ? "s" : ""}.
-            De estos eventos, {eventosCriticos.toLocaleString()} son considerados críticos (eventos tipo D1 o D3),
-            incluyendo {eventosFatiga.toLocaleString()} eventos de fatiga (tipo D1).
+            Los eventos registrados incluyen {distribution.d1.toLocaleString()} eventos de fatiga (D1) y {distribution.d3.toLocaleString()} eventos de distracción (D3).
           </Text>
 
           <Text style={styles.text}>
@@ -1200,14 +1257,14 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
           <Text style={styles.subsectionTitle}>Indicadores Ejecutivos</Text>
           <View style={styles.kpiGrid}>
             <View style={styles.kpiCard}>
-              <Text style={styles.kpiLabel}>Eventos Críticos</Text>
-              <Text style={styles.kpiValue}>{eventosCriticos.toLocaleString()}</Text>
-              <Text style={[styles.kpiLabel, { fontSize: 9, marginTop: 3 }]}>D1 o D3</Text>
+              <Text style={styles.kpiLabel}>Fatiga (D1)</Text>
+              <Text style={styles.kpiValue}>{distribution.d1.toLocaleString()}</Text>
+              <Text style={[styles.kpiLabel, { fontSize: 9, marginTop: 3 }]}>{distribution.pctFatiga.toFixed(1)}%</Text>
             </View>
             <View style={styles.kpiCard}>
-              <Text style={styles.kpiLabel}>Eventos de Fatiga</Text>
-              <Text style={styles.kpiValue}>{eventosFatiga.toLocaleString()}</Text>
-              <Text style={[styles.kpiLabel, { fontSize: 9, marginTop: 3 }]}>Tipo D1</Text>
+              <Text style={styles.kpiLabel}>Distracción (D3)</Text>
+              <Text style={styles.kpiValue}>{distribution.d3.toLocaleString()}</Text>
+              <Text style={[styles.kpiLabel, { fontSize: 9, marginTop: 3 }]}>{distribution.pctDistraccion.toFixed(1)}%</Text>
             </View>
             <View style={styles.kpiCard}>
               <Text style={styles.kpiLabel}>Vehículos Únicos</Text>
@@ -1246,11 +1303,13 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
           <View style={styles.kpiGrid}>
             <View style={styles.kpiCard}>
               <Text style={styles.kpiLabel}>Total de Eventos</Text>
-              <Text style={styles.kpiValue}>{totalEventos.toLocaleString()}</Text>
+              <Text style={styles.kpiValue}>{distribution.total.toLocaleString()}</Text>
+              <Text style={[styles.kpiLabel, { fontSize: 9, marginTop: 3 }]}>D1 + D3</Text>
             </View>
             <View style={styles.kpiCard}>
               <Text style={styles.kpiLabel}>Tipos de Evento</Text>
-              <Text style={styles.kpiValue}>{tiposEvento.size}</Text>
+              <Text style={styles.kpiValue}>{distribution.d1 > 0 && distribution.d3 > 0 ? 2 : distribution.total > 0 ? 1 : 0}</Text>
+              <Text style={[styles.kpiLabel, { fontSize: 9, marginTop: 3 }]}>D1, D3</Text>
             </View>
             <View style={styles.kpiCard}>
               <Text style={styles.kpiLabel}>Archivos Procesados</Text>

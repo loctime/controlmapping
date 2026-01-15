@@ -6,10 +6,10 @@ import { Badge } from "@/components/ui/badge"
 import { AlertTriangle, Users, Car } from "lucide-react"
 import type { VehiculoEvento } from "@/domains/vehiculo/types"
 import {
-  calculateRiskScoreByOperator,
-  calculateRiskScoreByVehicle,
+  computeOperatorRiskProfiles,
+  computeVehicleRiskProfiles,
   type RiskLevel,
-} from "./riskScoring"
+} from "./riskModel"
 
 interface RiskPriorityPanelProps {
   eventos: VehiculoEvento[]
@@ -38,26 +38,26 @@ function getRiskBadgeClassName(level: RiskLevel): string {
 }
 
 export function RiskPriorityPanel({ eventos }: RiskPriorityPanelProps) {
-  // Calcular rankings usando las funciones existentes
+  // Calcular rankings usando el nuevo modelo
   const operadoresRanking = useMemo(() => {
-    return calculateRiskScoreByOperator(eventos)
+    return computeOperatorRiskProfiles(eventos)
   }, [eventos])
 
   const vehiculosRanking = useMemo(() => {
-    return calculateRiskScoreByVehicle(eventos)
+    return computeVehicleRiskProfiles(eventos)
   }, [eventos])
 
   // Filtrar top 3 operadores críticos (score HIGH > 50)
   const operadoresCriticos = useMemo(() => {
     return operadoresRanking
-      .filter((op) => op.level === "HIGH" && op.score > 50)
+      .filter((op) => op.score.level === "HIGH" && op.score.score > 50)
       .slice(0, 3)
   }, [operadoresRanking])
 
   // Filtrar top 3 vehículos críticos (score HIGH > 50)
   const vehiculosCriticos = useMemo(() => {
     return vehiculosRanking
-      .filter((veh) => veh.level === "HIGH" && veh.score > 50)
+      .filter((veh) => veh.score.level === "HIGH" && veh.score.score > 50)
       .slice(0, 3)
   }, [vehiculosRanking])
 
@@ -99,24 +99,28 @@ export function RiskPriorityPanel({ eventos }: RiskPriorityPanelProps) {
                           </div>
                           <div className="flex items-center gap-2 mt-2">
                             <Badge
-                              className={getRiskBadgeClassName(operador.level)}
-                              variant={getRiskBadgeVariant(operador.level)}
+                              className={getRiskBadgeClassName(operador.score.level)}
+                              variant={getRiskBadgeVariant(operador.score.level)}
                             >
-                              {operador.level}
+                              {operador.score.level}
                             </Badge>
                             <span className="text-sm text-muted-foreground">
-                              Score: <span className="font-mono font-semibold">{operador.score.toFixed(1)}</span>
+                              Score: <span className="font-mono font-semibold">{operador.score.score.toFixed(1)}</span>
                             </span>
                           </div>
                         </div>
                       </div>
                       <div className="pt-2 border-t border-border/50">
                         <div className="flex items-center justify-between text-sm">
-                          <span className="text-muted-foreground">Eventos de fatiga:</span>
+                          <span className="text-muted-foreground">Fatiga (D1):</span>
+                          <span className="font-semibold text-red-600">
+                            {operador.distribution.d1 > 0 ? operador.distribution.d1.toLocaleString() : "-"}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm mt-1">
+                          <span className="text-muted-foreground">Distracción (D3):</span>
                           <span className="font-semibold text-orange-600">
-                            {operador.eventosFatiga > 0
-                              ? operador.eventosFatiga.toLocaleString()
-                              : "-"}
+                            {operador.distribution.d3 > 0 ? operador.distribution.d3.toLocaleString() : "-"}
                           </span>
                         </div>
                         <div className="flex items-center justify-between text-sm mt-1">
@@ -164,24 +168,28 @@ export function RiskPriorityPanel({ eventos }: RiskPriorityPanelProps) {
                           </div>
                           <div className="flex items-center gap-2 mt-2">
                             <Badge
-                              className={getRiskBadgeClassName(vehiculo.level)}
-                              variant={getRiskBadgeVariant(vehiculo.level)}
+                              className={getRiskBadgeClassName(vehiculo.score.level)}
+                              variant={getRiskBadgeVariant(vehiculo.score.level)}
                             >
-                              {vehiculo.level}
+                              {vehiculo.score.level}
                             </Badge>
                             <span className="text-sm text-muted-foreground">
-                              Score: <span className="font-mono font-semibold">{vehiculo.score.toFixed(1)}</span>
+                              Score: <span className="font-mono font-semibold">{vehiculo.score.score.toFixed(1)}</span>
                             </span>
                           </div>
                         </div>
                       </div>
                       <div className="pt-2 border-t border-border/50">
                         <div className="flex items-center justify-between text-sm">
-                          <span className="text-muted-foreground">Eventos críticos:</span>
-                          <span className="font-semibold text-destructive">
-                            {vehiculo.eventosCriticos > 0
-                              ? vehiculo.eventosCriticos.toLocaleString()
-                              : "-"}
+                          <span className="text-muted-foreground">Fatiga (D1):</span>
+                          <span className="font-semibold text-red-600">
+                            {vehiculo.distribution.d1 > 0 ? vehiculo.distribution.d1.toLocaleString() : "-"}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm mt-1">
+                          <span className="text-muted-foreground">Distracción (D3):</span>
+                          <span className="font-semibold text-orange-600">
+                            {vehiculo.distribution.d3 > 0 ? vehiculo.distribution.d3.toLocaleString() : "-"}
                           </span>
                         </div>
                         <div className="flex items-center justify-between text-sm mt-1">

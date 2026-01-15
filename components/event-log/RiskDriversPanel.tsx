@@ -4,58 +4,32 @@ import { useMemo } from "react"
 import { Card } from "@/components/ui/card"
 import type { VehiculoEvento } from "@/domains/vehiculo/types"
 import {
-  calculateRiskScoreByOperator,
-  calculateRiskScoreByVehicle,
-  calculateRiskDriversByOperator,
-  calculateRiskDriversByVehicle,
-} from "./riskScoring"
+  computeOperatorRiskProfiles,
+  computeVehicleRiskProfiles,
+} from "./riskModel"
 
 interface RiskDriversPanelProps {
   eventos: VehiculoEvento[]
 }
 
 export function RiskDriversPanel({ eventos }: RiskDriversPanelProps) {
-  // Calcular scores y drivers usando las funciones existentes
-  const operadoresScores = useMemo(() => {
-    return calculateRiskScoreByOperator(eventos)
+  // Calcular perfiles de riesgo usando el nuevo modelo
+  const operadoresProfiles = useMemo(() => {
+    return computeOperatorRiskProfiles(eventos)
   }, [eventos])
 
-  const vehiculosScores = useMemo(() => {
-    return calculateRiskScoreByVehicle(eventos)
+  const vehiculosProfiles = useMemo(() => {
+    return computeVehicleRiskProfiles(eventos)
   }, [eventos])
 
-  const operadoresDrivers = useMemo(() => {
-    return calculateRiskDriversByOperator(eventos)
-  }, [eventos])
-
-  const vehiculosDrivers = useMemo(() => {
-    return calculateRiskDriversByVehicle(eventos)
-  }, [eventos])
-
-  // Filtrar solo los HIGH y combinar con sus drivers
+  // Filtrar solo los HIGH
   const operadoresHigh = useMemo(() => {
-    return operadoresScores
-      .filter((op) => op.level === "HIGH")
-      .map((op) => {
-        const drivers = operadoresDrivers.find((d) => d.operador === op.operador)
-        return {
-          ...op,
-          drivers: drivers?.drivers || { fatigaPct: 0, velocidadPct: 0, reincidenciaPct: 0 },
-        }
-      })
-  }, [operadoresScores, operadoresDrivers])
+    return operadoresProfiles.filter((op) => op.score.level === "HIGH")
+  }, [operadoresProfiles])
 
   const vehiculosHigh = useMemo(() => {
-    return vehiculosScores
-      .filter((veh) => veh.level === "HIGH")
-      .map((veh) => {
-        const drivers = vehiculosDrivers.find((d) => d.vehiculo === veh.vehiculo)
-        return {
-          ...veh,
-          drivers: drivers?.drivers || { fatigaPct: 0, velocidadPct: 0, reincidenciaPct: 0 },
-        }
-      })
-  }, [vehiculosScores, vehiculosDrivers])
+    return vehiculosProfiles.filter((veh) => veh.score.level === "HIGH")
+  }, [vehiculosProfiles])
 
   const tieneOperadoresHigh = operadoresHigh.length > 0
   const tieneVehiculosHigh = vehiculosHigh.length > 0
@@ -96,66 +70,72 @@ export function RiskDriversPanel({ eventos }: RiskDriversPanelProps) {
                       <div>
                         <h5 className="font-semibold">{operador.operador}</h5>
                         <p className="text-xs text-muted-foreground">
-                          Score: {operador.score.toFixed(1)} • {operador.totalEventos} evento{operador.totalEventos !== 1 ? "s" : ""}
+                          Score: {operador.score.score.toFixed(1)} ({operador.score.level}) • {operador.totalEventos} evento{operador.totalEventos !== 1 ? "s" : ""}
                         </p>
                       </div>
 
-                      {/* Barras de progreso apiladas */}
+                      {/* Distribución de eventos (D1 y D3) */}
                       <div className="space-y-2">
-                        {/* Fatiga */}
-                        {operador.drivers.fatigaPct > 0 && (
+                        {/* Fatiga (D1) */}
+                        {operador.distribution.pctFatiga > 0 && (
                           <div className="space-y-1">
                             <div className="flex items-center justify-between text-xs">
                               <span className="text-muted-foreground">Fatiga</span>
                               <span className="font-medium text-red-600">
-                                {operador.drivers.fatigaPct.toFixed(1)}%
+                                {operador.distribution.pctFatiga.toFixed(1)}%
                               </span>
                             </div>
                             <div className="h-2 w-full bg-red-50 rounded-full overflow-hidden">
                               <div
                                 className="h-full bg-red-500 rounded-full transition-all"
-                                style={{ width: `${operador.drivers.fatigaPct}%` }}
+                                style={{ width: `${operador.distribution.pctFatiga}%` }}
                               />
                             </div>
                           </div>
                         )}
 
-                        {/* Velocidad */}
-                        {operador.drivers.velocidadPct > 0 && (
+                        {/* Distracción (D3) */}
+                        {operador.distribution.pctDistraccion > 0 && (
                           <div className="space-y-1">
                             <div className="flex items-center justify-between text-xs">
-                              <span className="text-muted-foreground">Velocidad</span>
+                              <span className="text-muted-foreground">Distracción</span>
                               <span className="font-medium text-orange-600">
-                                {operador.drivers.velocidadPct.toFixed(1)}%
+                                {operador.distribution.pctDistraccion.toFixed(1)}%
                               </span>
                             </div>
                             <div className="h-2 w-full bg-orange-50 rounded-full overflow-hidden">
                               <div
                                 className="h-full bg-orange-500 rounded-full transition-all"
-                                style={{ width: `${operador.drivers.velocidadPct}%` }}
-                              />
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Reincidencia */}
-                        {operador.drivers.reincidenciaPct > 0 && (
-                          <div className="space-y-1">
-                            <div className="flex items-center justify-between text-xs">
-                              <span className="text-muted-foreground">Reincidencia</span>
-                              <span className="font-medium text-yellow-600">
-                                {operador.drivers.reincidenciaPct.toFixed(1)}%
-                              </span>
-                            </div>
-                            <div className="h-2 w-full bg-yellow-50 rounded-full overflow-hidden">
-                              <div
-                                className="h-full bg-yellow-500 rounded-full transition-all"
-                                style={{ width: `${operador.drivers.reincidenciaPct}%` }}
+                                style={{ width: `${operador.distribution.pctDistraccion}%` }}
                               />
                             </div>
                           </div>
                         )}
                       </div>
+
+                      {/* Factores de riesgo */}
+                      {(operador.factors.altaVelocidad > 0 ||
+                        operador.factors.reincidencia > 0 ||
+                        operador.factors.franjaDominante) && (
+                        <div className="pt-2 border-t border-border/50 space-y-1">
+                          <p className="text-xs font-semibold text-muted-foreground">Factores de riesgo:</p>
+                          {operador.factors.altaVelocidad > 0 && (
+                            <p className="text-xs text-muted-foreground">
+                              • Alta velocidad: {operador.factors.altaVelocidad} evento{operador.factors.altaVelocidad !== 1 ? "s" : ""}
+                            </p>
+                          )}
+                          {operador.factors.reincidencia > 0 && (
+                            <p className="text-xs text-muted-foreground">
+                              • Reincidencia: {operador.factors.reincidencia} día{operador.factors.reincidencia !== 1 ? "s" : ""} crítico{operador.factors.reincidencia !== 1 ? "s" : ""}
+                            </p>
+                          )}
+                          {operador.factors.franjaDominante && (
+                            <p className="text-xs text-muted-foreground">
+                              • Franja dominante: {operador.factors.franjaDominante}h ({operador.factors.franjaCount} evento{operador.factors.franjaCount !== 1 ? "s" : ""})
+                            </p>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </Card>
                 ))}
@@ -174,66 +154,72 @@ export function RiskDriversPanel({ eventos }: RiskDriversPanelProps) {
                       <div>
                         <h5 className="font-semibold">{vehiculo.vehiculo}</h5>
                         <p className="text-xs text-muted-foreground">
-                          Score: {vehiculo.score.toFixed(1)} • {vehiculo.totalEventos} evento{vehiculo.totalEventos !== 1 ? "s" : ""}
+                          Score: {vehiculo.score.score.toFixed(1)} ({vehiculo.score.level}) • {vehiculo.totalEventos} evento{vehiculo.totalEventos !== 1 ? "s" : ""}
                         </p>
                       </div>
 
-                      {/* Barras de progreso apiladas */}
+                      {/* Distribución de eventos (D1 y D3) */}
                       <div className="space-y-2">
-                        {/* Fatiga */}
-                        {vehiculo.drivers.fatigaPct > 0 && (
+                        {/* Fatiga (D1) */}
+                        {vehiculo.distribution.pctFatiga > 0 && (
                           <div className="space-y-1">
                             <div className="flex items-center justify-between text-xs">
                               <span className="text-muted-foreground">Fatiga</span>
                               <span className="font-medium text-red-600">
-                                {vehiculo.drivers.fatigaPct.toFixed(1)}%
+                                {vehiculo.distribution.pctFatiga.toFixed(1)}%
                               </span>
                             </div>
                             <div className="h-2 w-full bg-red-50 rounded-full overflow-hidden">
                               <div
                                 className="h-full bg-red-500 rounded-full transition-all"
-                                style={{ width: `${vehiculo.drivers.fatigaPct}%` }}
+                                style={{ width: `${vehiculo.distribution.pctFatiga}%` }}
                               />
                             </div>
                           </div>
                         )}
 
-                        {/* Velocidad */}
-                        {vehiculo.drivers.velocidadPct > 0 && (
+                        {/* Distracción (D3) */}
+                        {vehiculo.distribution.pctDistraccion > 0 && (
                           <div className="space-y-1">
                             <div className="flex items-center justify-between text-xs">
-                              <span className="text-muted-foreground">Velocidad</span>
+                              <span className="text-muted-foreground">Distracción</span>
                               <span className="font-medium text-orange-600">
-                                {vehiculo.drivers.velocidadPct.toFixed(1)}%
+                                {vehiculo.distribution.pctDistraccion.toFixed(1)}%
                               </span>
                             </div>
                             <div className="h-2 w-full bg-orange-50 rounded-full overflow-hidden">
                               <div
                                 className="h-full bg-orange-500 rounded-full transition-all"
-                                style={{ width: `${vehiculo.drivers.velocidadPct}%` }}
-                              />
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Reincidencia */}
-                        {vehiculo.drivers.reincidenciaPct > 0 && (
-                          <div className="space-y-1">
-                            <div className="flex items-center justify-between text-xs">
-                              <span className="text-muted-foreground">Reincidencia</span>
-                              <span className="font-medium text-yellow-600">
-                                {vehiculo.drivers.reincidenciaPct.toFixed(1)}%
-                              </span>
-                            </div>
-                            <div className="h-2 w-full bg-yellow-50 rounded-full overflow-hidden">
-                              <div
-                                className="h-full bg-yellow-500 rounded-full transition-all"
-                                style={{ width: `${vehiculo.drivers.reincidenciaPct}%` }}
+                                style={{ width: `${vehiculo.distribution.pctDistraccion}%` }}
                               />
                             </div>
                           </div>
                         )}
                       </div>
+
+                      {/* Factores de riesgo */}
+                      {(vehiculo.factors.altaVelocidad > 0 ||
+                        vehiculo.factors.reincidencia > 0 ||
+                        vehiculo.factors.franjaDominante) && (
+                        <div className="pt-2 border-t border-border/50 space-y-1">
+                          <p className="text-xs font-semibold text-muted-foreground">Factores de riesgo:</p>
+                          {vehiculo.factors.altaVelocidad > 0 && (
+                            <p className="text-xs text-muted-foreground">
+                              • Alta velocidad: {vehiculo.factors.altaVelocidad} evento{vehiculo.factors.altaVelocidad !== 1 ? "s" : ""}
+                            </p>
+                          )}
+                          {vehiculo.factors.reincidencia > 0 && (
+                            <p className="text-xs text-muted-foreground">
+                              • Reincidencia: {vehiculo.factors.reincidencia} día{vehiculo.factors.reincidencia !== 1 ? "s" : ""} crítico{vehiculo.factors.reincidencia !== 1 ? "s" : ""}
+                            </p>
+                          )}
+                          {vehiculo.factors.franjaDominante && (
+                            <p className="text-xs text-muted-foreground">
+                              • Franja dominante: {vehiculo.factors.franjaDominante}h ({vehiculo.factors.franjaCount} evento{vehiculo.factors.franjaCount !== 1 ? "s" : ""})
+                            </p>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </Card>
                 ))}

@@ -3,9 +3,11 @@ import { Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer"
 import type { VehiculoEventosFile, VehiculoEvento } from "@/domains/vehiculo/types"
 import type { SecurityAlert } from "./securityAlerts"
 import {
-  calculateRiskScoreByOperator,
-  calculateRiskScoreByVehicle,
-} from "./riskScoring"
+  computeOperatorRiskProfiles,
+  computeVehicleRiskProfiles,
+  countD1D3,
+  computeFactors,
+} from "./riskModel"
 
 interface ExecutiveOnePagerViewProps {
   data: VehiculoEventosFile[]
@@ -323,10 +325,10 @@ function getPeriodTitle(data: VehiculoEventosFile[]): string {
 
 function generateConclusion(
   totalEventos: number,
-  porcentajeFatiga: number,
+  distribution: ReturnType<typeof countD1D3>,
   securityAlert: SecurityAlert,
-  topOperadores: ReturnType<typeof calculateRiskScoreByOperator>,
-  topVehiculos: ReturnType<typeof calculateRiskScoreByVehicle>
+  topOperadores: ReturnType<typeof computeOperatorRiskProfiles>,
+  topVehiculos: ReturnType<typeof computeVehicleRiskProfiles>
 ): string {
   const partes: string[] = []
   
@@ -336,15 +338,15 @@ function generateConclusion(
     partes.push("Requiere atención inmediata")
   }
   
-  if (porcentajeFatiga > 50) {
-    partes.push(`fatiga dominante (${porcentajeFatiga}%)`)
+  if (distribution.pctFatiga > 50) {
+    partes.push(`Fatiga dominante (${distribution.pctFatiga.toFixed(1)}%)`)
   }
   
   if (topOperadores.length > 0 || topVehiculos.length > 0) {
     const criticos = []
     if (topOperadores.length > 0) criticos.push(`${topOperadores.length} operador${topOperadores.length > 1 ? "es" : ""}`)
     if (topVehiculos.length > 0) criticos.push(`${topVehiculos.length} vehículo${topVehiculos.length > 1 ? "s" : ""}`)
-    partes.push(`prioridad: ${criticos.join(" y ")}`)
+    partes.push(`Prioridad: ${criticos.join(" y ")}`)
   }
   
   if (partes.length === 0) {
@@ -360,13 +362,12 @@ export const ExecutiveOnePagerView: React.FC<ExecutiveOnePagerViewProps> = ({
 }) => {
   const allEventos = data.flatMap((file) => file.eventos)
   
+  // Calcular distribución de eventos reales (D1/D3)
+  const distribution = countD1D3(allEventos)
+  const factors = computeFactors(allEventos)
+  
   // Calcular KPIs
   const totalEventos = allEventos.length
-  const eventosFatiga = allEventos.filter((e) => e.evento?.trim() === "D1").length
-  const eventosDistraccion = allEventos.filter((e) => e.evento?.trim() === "D3").length
-  const porcentajeFatiga = totalEventos > 0 ? Math.round((eventosFatiga / totalEventos) * 100) : 0
-  const porcentajeDistraccion = totalEventos > 0 ? Math.round((eventosDistraccion / totalEventos) * 100) : 0
-  
   const operadoresUnicos = new Set(
     allEventos.map((e) => e.operador?.trim()).filter((o) => o && o !== "")
   ).size
@@ -374,7 +375,7 @@ export const ExecutiveOnePagerView: React.FC<ExecutiveOnePagerViewProps> = ({
   const velocidades = allEventos.map((e) => e.velocidad).filter((v) => v > 0)
   const velocidadMaxima = velocidades.length > 0 ? Math.max(...velocidades) : 0
   
-  // Eventos por franja horaria
+  // Eventos por franja horaria (para visualización, no como evento)
   const eventosPorFranja: Record<string, number> = {
     "00-06": 0,
     "06-12": 0,
@@ -392,22 +393,22 @@ export const ExecutiveOnePagerView: React.FC<ExecutiveOnePagerViewProps> = ({
   
   const maxFranja = Math.max(...Object.values(eventosPorFranja))
   
-  // Top operadores y vehículos críticos
-  const operadoresScores = calculateRiskScoreByOperator(allEventos)
-  const vehiculosScores = calculateRiskScoreByVehicle(allEventos)
+  // Top operadores y vehículos críticos usando nuevo modelo
+  const operadoresProfiles = computeOperatorRiskProfiles(allEventos)
+  const vehiculosProfiles = computeVehicleRiskProfiles(allEventos)
   
-  const topOperadores = operadoresScores
-    .filter((op) => op.level === "HIGH" && op.score > 50)
+  const topOperadores = operadoresProfiles
+    .filter((op) => op.score.level === "HIGH" && op.score.score > 50)
     .slice(0, 3)
   
-  const topVehiculos = vehiculosScores
-    .filter((veh) => veh.level === "HIGH" && veh.score > 50)
+  const topVehiculos = vehiculosProfiles
+    .filter((veh) => veh.score.level === "HIGH" && veh.score.score > 50)
     .slice(0, 3)
   
   // Generar conclusión
   const conclusion = generateConclusion(
     totalEventos,
-    porcentajeFatiga,
+    distribution,
     securityAlert,
     topOperadores,
     topVehiculos
@@ -437,25 +438,50 @@ export const ExecutiveOnePagerView: React.FC<ExecutiveOnePagerViewProps> = ({
         <View style={styles.kpiGrid}>
           <View style={styles.kpiCard}>
             <Text style={styles.kpiLabel}>Eventos Totales</Text>
-            <Text style={styles.kpiValue}>{totalEventos.toLocaleString()}</Text>
+            <Text style={styles.kpiValue}>{distribution.total}</Text>
+            <Text style={styles.kpiSubtext}>D1 + D3</Text>
           </View>
           <View style={styles.kpiCard}>
-            <Text style={styles.kpiLabel}>% Fatiga</Text>
-            <Text style={styles.kpiValue}>{porcentajeFatiga}%</Text>
-            <Text style={styles.kpiSubtext}>{eventosFatiga} eventos</Text>
+            <Text style={styles.kpiLabel}>Fatiga (D1)</Text>
+            <Text style={styles.kpiValue}>{distribution.d1}</Text>
+            <Text style={styles.kpiSubtext}>{distribution.pctFatiga.toFixed(1)}%</Text>
           </View>
           <View style={styles.kpiCard}>
-            <Text style={styles.kpiLabel}>Operadores Afectados</Text>
+            <Text style={styles.kpiLabel}>Distracción (D3)</Text>
+            <Text style={styles.kpiValue}>{distribution.d3}</Text>
+            <Text style={styles.kpiSubtext}>{distribution.pctDistraccion.toFixed(1)}%</Text>
+          </View>
+          <View style={styles.kpiCard}>
+            <Text style={styles.kpiLabel}>Operadores</Text>
             <Text style={styles.kpiValue}>{operadoresUnicos}</Text>
           </View>
-          <View style={styles.kpiCard}>
-            <Text style={styles.kpiLabel}>Velocidad Máxima</Text>
-            <Text style={styles.kpiValue}>
-              {velocidadMaxima > 0 ? `${velocidadMaxima}` : "-"}
-            </Text>
-            <Text style={styles.kpiSubtext}>km/h</Text>
-          </View>
         </View>
+        
+        {/* Factores de Riesgo */}
+        {(factors.altaVelocidad > 0 || factors.reincidencia > 0 || factors.franjaDominante) && (
+          <View style={{ marginBottom: 10, padding: 8, backgroundColor: "#fffbeb", borderRadius: 4 }}>
+            <Text style={{ fontSize: 7, fontWeight: "bold", color: "#78350f", marginBottom: 4 }}>
+              Factores de Riesgo:
+            </Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+              {factors.altaVelocidad > 0 && (
+                <Text style={{ fontSize: 6, color: "#78350f" }}>
+                  • Alta velocidad: {factors.altaVelocidad} evento{factors.altaVelocidad !== 1 ? "s" : ""}
+                </Text>
+              )}
+              {factors.reincidencia > 0 && (
+                <Text style={{ fontSize: 6, color: "#78350f" }}>
+                  • Reincidencia: {factors.reincidencia} día{factors.reincidencia !== 1 ? "s" : ""} crítico{factors.reincidencia !== 1 ? "s" : ""}
+                </Text>
+              )}
+              {factors.franjaDominante && (
+                <Text style={{ fontSize: 6, color: "#78350f" }}>
+                  • Franja dominante: {factors.franjaDominante}h
+                </Text>
+              )}
+            </View>
+          </View>
+        )}
         
         {/* Gráficos */}
         <View style={styles.chartsRow}>
@@ -467,13 +493,13 @@ export const ExecutiveOnePagerView: React.FC<ExecutiveOnePagerViewProps> = ({
                 style={[
                   styles.donutCircle,
                   {
-                    borderColor: porcentajeFatiga > porcentajeDistraccion ? "#dc2626" : "#ea580c",
+                    borderColor: distribution.pctFatiga > distribution.pctDistraccion ? "#dc2626" : "#ea580c",
                   },
                 ]}
               >
                 <Text style={styles.donutText}>
-                  {totalEventos > 0
-                    ? `${Math.round((eventosFatiga / totalEventos) * 100)}%`
+                  {distribution.total > 0
+                    ? `${distribution.pctFatiga.toFixed(0)}%`
                     : "0%"}
                 </Text>
                 <Text style={[styles.donutLabel, { fontSize: 5, marginTop: 1 }]}>Fatiga</Text>
@@ -481,11 +507,11 @@ export const ExecutiveOnePagerView: React.FC<ExecutiveOnePagerViewProps> = ({
               <View style={styles.donutLegend}>
                 <View style={styles.donutLegendItem}>
                   <View style={[styles.donutLegendDot, { backgroundColor: "#dc2626" }]} />
-                  <Text style={styles.donutLegendText}>Fatiga {porcentajeFatiga}%</Text>
+                  <Text style={styles.donutLegendText}>Fatiga {distribution.pctFatiga.toFixed(1)}%</Text>
                 </View>
                 <View style={styles.donutLegendItem}>
                   <View style={[styles.donutLegendDot, { backgroundColor: "#ea580c" }]} />
-                  <Text style={styles.donutLegendText}>Distracción {porcentajeDistraccion}%</Text>
+                  <Text style={styles.donutLegendText}>Distracción {distribution.pctDistraccion.toFixed(1)}%</Text>
                 </View>
               </View>
             </View>
@@ -528,7 +554,10 @@ export const ExecutiveOnePagerView: React.FC<ExecutiveOnePagerViewProps> = ({
                     #{idx + 1} {op.operador}
                   </Text>
                   <Text style={styles.priorityScore}>
-                    Score: {op.score.toFixed(1)} • {op.totalEventos} eventos
+                    Score: {op.score.score.toFixed(1)} ({op.score.level}) • {op.totalEventos} eventos
+                  </Text>
+                  <Text style={[styles.priorityScore, { fontSize: 5, marginTop: 1 }]}>
+                    D1: {op.distribution.d1} • D3: {op.distribution.d3}
                   </Text>
                 </View>
               ))
@@ -551,7 +580,10 @@ export const ExecutiveOnePagerView: React.FC<ExecutiveOnePagerViewProps> = ({
                     #{idx + 1} {veh.vehiculo}
                   </Text>
                   <Text style={styles.priorityScore}>
-                    Score: {veh.score.toFixed(1)} • {veh.totalEventos} eventos
+                    Score: {veh.score.score.toFixed(1)} ({veh.score.level}) • {veh.totalEventos} eventos
+                  </Text>
+                  <Text style={[styles.priorityScore, { fontSize: 5, marginTop: 1 }]}>
+                    D1: {veh.distribution.d1} • D3: {veh.distribution.d3}
                   </Text>
                 </View>
               ))

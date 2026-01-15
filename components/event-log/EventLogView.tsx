@@ -11,10 +11,12 @@ import { format } from "date-fns"
 import { pdf } from "@react-pdf/renderer"
 import { FileDown, AlertTriangle, Car, Users, Gauge } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { generateSecurityBanner } from "./securityAlerts"
 import { SecurityAlertBanner } from "./SecurityAlertBanner"
 import { VehiculoEventosPdfReport } from "./VehiculoEventosPdfReport"
 import { ExecutiveOnePagerView } from "./ExecutiveOnePagerView"
+import { SecurityAlertPdf } from "./SecurityAlertPdf"
 import { EventChartsSection } from "./EventChartsSection"
 import { ExecutiveSummary } from "./ExecutiveSummary"
 import { RiskPriorityPanel } from "./RiskPriorityPanel"
@@ -182,6 +184,31 @@ export function EventLogView({ data }: EventLogViewProps) {
     } catch (error) {
       console.error("Error al generar One-Pager PDF:", error)
       alert("Error al generar el One-Pager PDF. Por favor, intentá nuevamente.")
+    }
+  }
+
+  // Función para exportar Alerta de Seguridad Vial PDF
+  const handleExportSecurityAlert = async () => {
+    try {
+      const pdfDoc = (
+        <SecurityAlertPdf
+          allEventos={allEventos}
+          securityAlert={securityAlert}
+          kpisEjecutivos={kpisEjecutivos}
+        />
+      )
+      const blob = await pdf(pdfDoc).toBlob()
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.href = url
+      link.download = `alerta-seguridad-vial-${new Date().toISOString().split("T")[0]}.pdf`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error("Error al generar Alerta de Seguridad Vial PDF:", error)
+      alert("Error al generar el PDF de Alerta de Seguridad Vial. Por favor, intentá nuevamente.")
     }
   }
 
@@ -447,6 +474,21 @@ export function EventLogView({ data }: EventLogViewProps) {
           <FileDown className="h-4 w-4" />
           Exportar One-Pager PDF
         </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              onClick={handleExportSecurityAlert}
+              className="gap-2"
+              variant="destructive"
+            >
+              <AlertTriangle className="h-4 w-4" />
+              Exportar Alerta de Seguridad Vial
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Documento preventivo para difusión interna</p>
+          </TooltipContent>
+        </Tooltip>
       </div>
     </div>
   )

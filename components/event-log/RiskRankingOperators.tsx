@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import type { VehiculoEvento } from "@/domains/vehiculo/types"
-import { calculateRiskScoreByOperator, type RiskLevel } from "./riskScoring"
+import { computeOperatorRiskProfiles, type RiskLevel } from "./riskModel"
 
 interface RiskRankingOperatorsProps {
   eventos: VehiculoEvento[]
@@ -35,7 +35,7 @@ function getRiskBadgeClassName(level: RiskLevel): string {
 
 export function RiskRankingOperators({ eventos }: RiskRankingOperatorsProps) {
   const rankings = useMemo(() => {
-    return calculateRiskScoreByOperator(eventos)
+    return computeOperatorRiskProfiles(eventos)
   }, [eventos])
 
   if (rankings.length === 0) {
@@ -70,8 +70,8 @@ export function RiskRankingOperators({ eventos }: RiskRankingOperatorsProps) {
                 <TableHead className="text-center">Score</TableHead>
                 <TableHead className="text-center">Nivel</TableHead>
                 <TableHead className="text-center">Total Eventos</TableHead>
-                <TableHead className="text-center">Eventos Fatiga</TableHead>
-                <TableHead className="text-center">Eventos Críticos</TableHead>
+                <TableHead className="text-center">Fatiga (D1)</TableHead>
+                <TableHead className="text-center">Distracción (D3)</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -82,32 +82,32 @@ export function RiskRankingOperators({ eventos }: RiskRankingOperatorsProps) {
                   </TableCell>
                   <TableCell className="font-medium">{ranking.operador}</TableCell>
                   <TableCell className="text-center">
-                    <span className="font-mono font-semibold">{ranking.score.toFixed(1)}</span>
+                    <span className="font-mono font-semibold">{ranking.score.score.toFixed(1)}</span>
                   </TableCell>
                   <TableCell className="text-center">
                     <Badge
-                      className={getRiskBadgeClassName(ranking.level)}
-                      variant={getRiskBadgeVariant(ranking.level)}
+                      className={getRiskBadgeClassName(ranking.score.level)}
+                      variant={getRiskBadgeVariant(ranking.score.level)}
                     >
-                      {ranking.level}
+                      {ranking.score.level}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-center">
                     {ranking.totalEventos.toLocaleString()}
                   </TableCell>
                   <TableCell className="text-center">
-                    {ranking.eventosFatiga > 0 ? (
-                      <span className="text-orange-600 font-medium">
-                        {ranking.eventosFatiga.toLocaleString()}
+                    {ranking.distribution.d1 > 0 ? (
+                      <span className="text-red-600 font-medium">
+                        {ranking.distribution.d1.toLocaleString()}
                       </span>
                     ) : (
                       <span className="text-muted-foreground">-</span>
                     )}
                   </TableCell>
                   <TableCell className="text-center">
-                    {ranking.eventosCriticos > 0 ? (
-                      <span className="text-destructive font-medium">
-                        {ranking.eventosCriticos.toLocaleString()}
+                    {ranking.distribution.d3 > 0 ? (
+                      <span className="text-orange-600 font-medium">
+                        {ranking.distribution.d3.toLocaleString()}
                       </span>
                     ) : (
                       <span className="text-muted-foreground">-</span>

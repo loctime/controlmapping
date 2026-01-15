@@ -2,10 +2,17 @@ import React from "react"
 import { Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer"
 import type { VehiculoEventosFile, VehiculoEvento } from "@/domains/vehiculo/types"
 import type { SecurityAlert } from "./securityAlerts"
+import {
+  calculateRiskScoreByOperator,
+  calculateRiskScoreByVehicle,
+  calculateRiskDriversByOperator,
+  calculateRiskDriversByVehicle,
+} from "./riskScoring"
 
 interface VehiculoEventosPdfReportProps {
   data: VehiculoEventosFile[]
   securityAlert: SecurityAlert
+  mode?: "executive" | "technical"
 }
 
 // Estilos del PDF
@@ -158,6 +165,56 @@ const styles = StyleSheet.create({
     textAlign: "center",
     fontSize: 9,
     color: "#9ca3af",
+  },
+  executiveCover: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 60,
+    backgroundColor: "#1f2937",
+  },
+  executiveTitle: {
+    fontSize: 36,
+    fontWeight: "bold",
+    marginBottom: 15,
+    color: "#ffffff",
+    textAlign: "center",
+  },
+  executiveSubtitle: {
+    fontSize: 18,
+    color: "#d1d5db",
+    marginBottom: 30,
+    textAlign: "center",
+  },
+  executiveDate: {
+    fontSize: 12,
+    color: "#9ca3af",
+    marginTop: 40,
+    textAlign: "center",
+  },
+  priorityCard: {
+    padding: 12,
+    backgroundColor: "#fef2f2",
+    borderWidth: 1,
+    borderStyle: "solid",
+    borderColor: "#dc2626",
+    borderRadius: 4,
+    marginBottom: 10,
+  },
+  driverBar: {
+    height: 8,
+    borderRadius: 2,
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  recommendationBox: {
+    padding: 15,
+    backgroundColor: "#f0f9ff",
+    borderWidth: 1,
+    borderStyle: "solid",
+    borderColor: "#0ea5e9",
+    borderRadius: 4,
+    marginBottom: 10,
   },
 })
 
@@ -320,6 +377,7 @@ function generarResumenEjecutivo(
 export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> = ({
   data,
   securityAlert,
+  mode = "executive",
 }) => {
   const fechaGeneracion = new Date().toLocaleDateString("es-AR", {
     year: "numeric",
@@ -379,6 +437,479 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
     securityAlert
   )
 
+  // Calcular rankings y drivers para modo executive
+  const operadoresScores = mode === "executive" ? calculateRiskScoreByOperator(allEventos) : []
+  const vehiculosScores = mode === "executive" ? calculateRiskScoreByVehicle(allEventos) : []
+  const operadoresDrivers = mode === "executive" ? calculateRiskDriversByOperator(allEventos) : []
+  const vehiculosDrivers = mode === "executive" ? calculateRiskDriversByVehicle(allEventos) : []
+
+  // Top 3 operadores y vehículos críticos
+  const top3Operadores = operadoresScores
+    .filter((op) => op.level === "HIGH" && op.score > 50)
+    .slice(0, 3)
+  const top3Vehiculos = vehiculosScores
+    .filter((veh) => veh.level === "HIGH" && veh.score > 50)
+    .slice(0, 3)
+
+  // Calcular eventos por tipo y franja horaria para gráficos
+  const eventosPorTipo: Record<string, number> = {}
+  const eventosPorFranja: Record<string, number> = {
+    "00-06": 0,
+    "06-12": 0,
+    "12-18": 0,
+    "18-24": 0,
+  }
+
+  allEventos.forEach((evento) => {
+    // Por tipo
+    const tipo = evento.evento?.trim() || "Desconocido"
+    eventosPorTipo[tipo] = (eventosPorTipo[tipo] || 0) + 1
+
+    // Por franja
+    const hora = evento.fecha.getHours()
+    if (hora >= 0 && hora < 6) eventosPorFranja["00-06"]++
+    else if (hora >= 6 && hora < 12) eventosPorFranja["06-12"]++
+    else if (hora >= 12 && hora < 18) eventosPorFranja["12-18"]++
+    else if (hora >= 18 && hora < 24) eventosPorFranja["18-24"]++
+  })
+
+  // Generar recomendaciones basadas en los datos
+  const recomendaciones: string[] = []
+  if (eventosFatiga > totalEventos * 0.5) {
+    recomendaciones.push("Revisar políticas de turnos y descansos debido a alta incidencia de eventos de fatiga")
+  }
+  if (top3Operadores.length > 0) {
+    recomendaciones.push(`Capacitar a los operadores ${top3Operadores.map((o) => o.operador).join(", ")} en prevención de riesgos`)
+  }
+  if (top3Vehiculos.length > 0) {
+    recomendaciones.push(`Realizar mantenimiento preventivo en vehículos ${top3Vehiculos.map((v) => v.vehiculo).join(", ")}`)
+  }
+  const franjaMasEventos = Object.entries(eventosPorFranja).reduce((a, b) =>
+    eventosPorFranja[a[0]] > eventosPorFranja[b[0]] ? a : b
+  )
+  if (franjaMasEventos[1] > 0) {
+    recomendaciones.push(`Reforzar controles en la franja horaria ${franjaMasEventos[0]}h debido a mayor concentración de eventos`)
+  }
+
+  if (mode === "executive") {
+    return (
+      <Document>
+        {/* 1. Portada Ejecutiva */}
+        <Page size="A4" style={styles.page}>
+          <View style={styles.executiveCover}>
+            <Text style={styles.executiveTitle}>REPORTE EJECUTIVO</Text>
+            <Text style={styles.executiveSubtitle}>Seguridad Vehicular</Text>
+            <Text style={styles.executiveSubtitle}>Análisis de Riesgos y Prioridades</Text>
+            <Text style={styles.executiveDate}>Generado el {fechaGeneracion}</Text>
+          </View>
+        </Page>
+
+        {/* 2. Resumen Ejecutivo */}
+        <Page size="A4" style={styles.page}>
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>RESUMEN EJECUTIVO</Text>
+            <Text style={[styles.text, { fontSize: 12, lineHeight: 1.8, marginBottom: 20 }]}>
+              {resumenEjecutivoTexto}
+            </Text>
+          </View>
+          <Text style={styles.pageNumber} render={({ pageNumber }) => `Página ${pageNumber}`} fixed />
+        </Page>
+
+        {/* 3. Alertas de Seguridad */}
+        <Page size="A4" style={styles.page}>
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>ALERTAS DE SEGURIDAD</Text>
+            <View style={[styles.alertBanner, alertStyles.banner, { padding: 20, marginBottom: 20 }]}>
+              {securityAlert.severity !== "OK" && (
+                <Text style={[styles.alertTitle, alertStyles.title, { fontSize: 16 }]}>
+                  ALERTA {getSeverityLabel(securityAlert.severity)} DE SEGURIDAD
+                </Text>
+              )}
+              <Text style={[styles.alertMessage, alertStyles.message, { fontSize: 12, lineHeight: 1.8 }]}>
+                {securityAlert.message}
+              </Text>
+              {securityAlert.severity !== "OK" && (
+                <View
+                  style={[
+                    styles.alertBadge,
+                    alertStyles.badge[1] || styles.badgeCritical,
+                    { marginTop: 10, padding: 8 },
+                  ]}
+                >
+                  <Text style={{ color: "#ffffff", fontSize: 12, fontWeight: "bold" }}>
+                    {getSeverityLabel(securityAlert.severity)}
+                  </Text>
+                </View>
+              )}
+              {securityAlert.count && (
+                <Text style={[styles.text, alertStyles.message, { marginTop: 10, fontSize: 11 }]}>
+                  Eventos relacionados: {securityAlert.count}
+                </Text>
+              )}
+            </View>
+          </View>
+          <Text style={styles.pageNumber} render={({ pageNumber }) => `Página ${pageNumber}`} fixed />
+        </Page>
+
+        {/* 4. KPIs Ejecutivos */}
+        <Page size="A4" style={styles.page}>
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>INDICADORES CLAVE</Text>
+            <View style={styles.kpiGrid}>
+              <View style={styles.kpiCard}>
+                <Text style={styles.kpiLabel}>Total de Eventos</Text>
+                <Text style={styles.kpiValue}>{totalEventos.toLocaleString()}</Text>
+              </View>
+              <View style={styles.kpiCard}>
+                <Text style={styles.kpiLabel}>Eventos Críticos</Text>
+                <Text style={styles.kpiValue}>{eventosCriticos.toLocaleString()}</Text>
+              </View>
+              <View style={styles.kpiCard}>
+                <Text style={styles.kpiLabel}>Eventos de Fatiga</Text>
+                <Text style={styles.kpiValue}>{eventosFatiga.toLocaleString()}</Text>
+              </View>
+              <View style={styles.kpiCard}>
+                <Text style={styles.kpiLabel}>Vehículos Únicos</Text>
+                <Text style={styles.kpiValue}>{vehiculosUnicos.toLocaleString()}</Text>
+              </View>
+              <View style={styles.kpiCard}>
+                <Text style={styles.kpiLabel}>Operadores Únicos</Text>
+                <Text style={styles.kpiValue}>{operadoresUnicos.toLocaleString()}</Text>
+              </View>
+              {velocidadMaxima > 0 && (
+                <View style={styles.kpiCard}>
+                  <Text style={styles.kpiLabel}>Velocidad Máxima</Text>
+                  <Text style={styles.kpiValue}>{velocidadMaxima.toLocaleString()} km/h</Text>
+                </View>
+              )}
+            </View>
+          </View>
+          <Text style={styles.pageNumber} render={({ pageNumber }) => `Página ${pageNumber}`} fixed />
+        </Page>
+
+        {/* 5. Prioridades de Intervención */}
+        {(top3Operadores.length > 0 || top3Vehiculos.length > 0) && (
+          <Page size="A4" style={styles.page}>
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>PRIORIDADES DE INTERVENCIÓN</Text>
+              
+              {top3Operadores.length > 0 && (
+                <>
+                  <Text style={styles.subsectionTitle}>Operadores Críticos</Text>
+                  {top3Operadores.map((op, idx) => (
+                    <View key={op.operador} style={styles.priorityCard}>
+                      <Text style={{ fontSize: 12, fontWeight: "bold", marginBottom: 5 }}>
+                        #{idx + 1} - {op.operador}
+                      </Text>
+                      <Text style={{ fontSize: 10, color: "#374151", marginBottom: 3 }}>
+                        Score: {op.score.toFixed(1)} • Eventos: {op.totalEventos} • Fatiga: {op.eventosFatiga}
+                      </Text>
+                    </View>
+                  ))}
+                </>
+              )}
+
+              {top3Vehiculos.length > 0 && (
+                <>
+                  <Text style={[styles.subsectionTitle, { marginTop: 15 }]}>Vehículos Críticos</Text>
+                  {top3Vehiculos.map((veh, idx) => (
+                    <View key={veh.vehiculo} style={styles.priorityCard}>
+                      <Text style={{ fontSize: 12, fontWeight: "bold", marginBottom: 5 }}>
+                        #{idx + 1} - {veh.vehiculo}
+                      </Text>
+                      <Text style={{ fontSize: 10, color: "#374151", marginBottom: 3 }}>
+                        Score: {veh.score.toFixed(1)} • Eventos: {veh.totalEventos} • Críticos: {veh.eventosCriticos}
+                      </Text>
+                    </View>
+                  ))}
+                </>
+              )}
+            </View>
+            <Text style={styles.pageNumber} render={({ pageNumber }) => `Página ${pageNumber}`} fixed />
+          </Page>
+        )}
+
+        {/* 6. Factores de Riesgo */}
+        {(top3Operadores.length > 0 || top3Vehiculos.length > 0) && (
+          <Page size="A4" style={styles.page}>
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>FACTORES DE RIESGO DOMINANTES</Text>
+              
+              {top3Operadores.length > 0 && (
+                <>
+                  <Text style={styles.subsectionTitle}>Operadores</Text>
+                  {top3Operadores.map((op) => {
+                    const drivers = operadoresDrivers.find((d) => d.operador === op.operador)
+                    if (!drivers) return null
+                    return (
+                      <View key={op.operador} style={{ marginBottom: 15 }}>
+                        <Text style={{ fontSize: 11, fontWeight: "bold", marginBottom: 5 }}>
+                          {op.operador}
+                        </Text>
+                        {drivers.drivers.fatigaPct > 0 && (
+                          <View style={{ marginBottom: 5 }}>
+                            <Text style={{ fontSize: 9, color: "#6b7280" }}>
+                              Fatiga: {drivers.drivers.fatigaPct.toFixed(1)}%
+                            </Text>
+                            <View style={[styles.driverBar, { backgroundColor: "#fee2e2", width: "100%" }]}>
+                              <View style={{ height: 8, backgroundColor: "#dc2626", width: `${drivers.drivers.fatigaPct}%` }} />
+                            </View>
+                          </View>
+                        )}
+                        {drivers.drivers.velocidadPct > 0 && (
+                          <View style={{ marginBottom: 5 }}>
+                            <Text style={{ fontSize: 9, color: "#6b7280" }}>
+                              Velocidad: {drivers.drivers.velocidadPct.toFixed(1)}%
+                            </Text>
+                            <View style={[styles.driverBar, { backgroundColor: "#ffedd5", width: "100%" }]}>
+                              <View style={{ height: 8, backgroundColor: "#ea580c", width: `${drivers.drivers.velocidadPct}%` }} />
+                            </View>
+                          </View>
+                        )}
+                        {drivers.drivers.reincidenciaPct > 0 && (
+                          <View style={{ marginBottom: 5 }}>
+                            <Text style={{ fontSize: 9, color: "#6b7280" }}>
+                              Reincidencia: {drivers.drivers.reincidenciaPct.toFixed(1)}%
+                            </Text>
+                            <View style={[styles.driverBar, { backgroundColor: "#fef9c3", width: "100%" }]}>
+                              <View style={{ height: 8, backgroundColor: "#eab308", width: `${drivers.drivers.reincidenciaPct}%` }} />
+                            </View>
+                          </View>
+                        )}
+                      </View>
+                    )
+                  })}
+                </>
+              )}
+
+              {top3Vehiculos.length > 0 && (
+                <>
+                  <Text style={[styles.subsectionTitle, { marginTop: 15 }]}>Vehículos</Text>
+                  {top3Vehiculos.map((veh) => {
+                    const drivers = vehiculosDrivers.find((d) => d.vehiculo === veh.vehiculo)
+                    if (!drivers) return null
+                    return (
+                      <View key={veh.vehiculo} style={{ marginBottom: 15 }}>
+                        <Text style={{ fontSize: 11, fontWeight: "bold", marginBottom: 5 }}>
+                          {veh.vehiculo}
+                        </Text>
+                        {drivers.drivers.fatigaPct > 0 && (
+                          <View style={{ marginBottom: 5 }}>
+                            <Text style={{ fontSize: 9, color: "#6b7280" }}>
+                              Fatiga: {drivers.drivers.fatigaPct.toFixed(1)}%
+                            </Text>
+                            <View style={[styles.driverBar, { backgroundColor: "#fee2e2", width: "100%" }]}>
+                              <View style={{ height: 8, backgroundColor: "#dc2626", width: `${drivers.drivers.fatigaPct}%` }} />
+                            </View>
+                          </View>
+                        )}
+                        {drivers.drivers.velocidadPct > 0 && (
+                          <View style={{ marginBottom: 5 }}>
+                            <Text style={{ fontSize: 9, color: "#6b7280" }}>
+                              Velocidad: {drivers.drivers.velocidadPct.toFixed(1)}%
+                            </Text>
+                            <View style={[styles.driverBar, { backgroundColor: "#ffedd5", width: "100%" }]}>
+                              <View style={{ height: 8, backgroundColor: "#ea580c", width: `${drivers.drivers.velocidadPct}%` }} />
+                            </View>
+                          </View>
+                        )}
+                        {drivers.drivers.reincidenciaPct > 0 && (
+                          <View style={{ marginBottom: 5 }}>
+                            <Text style={{ fontSize: 9, color: "#6b7280" }}>
+                              Reincidencia: {drivers.drivers.reincidenciaPct.toFixed(1)}%
+                            </Text>
+                            <View style={[styles.driverBar, { backgroundColor: "#fef9c3", width: "100%" }]}>
+                              <View style={{ height: 8, backgroundColor: "#eab308", width: `${drivers.drivers.reincidenciaPct}%` }} />
+                            </View>
+                          </View>
+                        )}
+                      </View>
+                    )
+                  })}
+                </>
+              )}
+            </View>
+            <Text style={styles.pageNumber} render={({ pageNumber }) => `Página ${pageNumber}`} fixed />
+          </Page>
+        )}
+
+        {/* 7. Rankings Resumidos */}
+        {(operadoresScores.length > 0 || vehiculosScores.length > 0) && (
+          <Page size="A4" style={styles.page}>
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>RANKINGS DE RIESGO</Text>
+              
+              {operadoresScores.length > 0 && (
+                <>
+                  <Text style={styles.subsectionTitle}>Top 10 Operadores por Score de Riesgo</Text>
+                  <View style={{ marginBottom: 15 }}>
+                    {operadoresScores.slice(0, 10).map((op, idx) => (
+                      <View
+                        key={op.operador}
+                        style={{
+                          flexDirection: "row",
+                          justifyContent: "space-between",
+                          paddingVertical: 6,
+                          paddingHorizontal: 8,
+                          backgroundColor: idx % 2 === 0 ? "#f9fafb" : "#ffffff",
+                          borderLeftWidth: op.level === "HIGH" ? 3 : op.level === "MEDIUM" ? 2 : 1,
+                          borderLeftColor:
+                            op.level === "HIGH" ? "#dc2626" : op.level === "MEDIUM" ? "#eab308" : "#22c55e",
+                          marginBottom: 2,
+                        }}
+                      >
+                        <View style={{ flexDirection: "row", flex: 1 }}>
+                          <Text style={{ fontSize: 9, color: "#6b7280", width: 25 }}>
+                            #{idx + 1}
+                          </Text>
+                          <Text style={{ fontSize: 10, fontWeight: op.level === "HIGH" ? "bold" : "normal", flex: 1 }}>
+                            {op.operador}
+                          </Text>
+                        </View>
+                        <View style={{ flexDirection: "row", gap: 10 }}>
+                          <Text style={{ fontSize: 9, color: "#6b7280", width: 40 }}>
+                            Score: {op.score.toFixed(1)}
+                          </Text>
+                          <Text
+                            style={{
+                              fontSize: 9,
+                              color:
+                                op.level === "HIGH" ? "#dc2626" : op.level === "MEDIUM" ? "#eab308" : "#22c55e",
+                              fontWeight: "bold",
+                              width: 50,
+                            }}
+                          >
+                            {op.level}
+                          </Text>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                </>
+              )}
+
+              {vehiculosScores.length > 0 && (
+                <>
+                  <Text style={[styles.subsectionTitle, { marginTop: 10 }]}>Top 10 Vehículos por Score de Riesgo</Text>
+                  <View>
+                    {vehiculosScores.slice(0, 10).map((veh, idx) => (
+                      <View
+                        key={veh.vehiculo}
+                        style={{
+                          flexDirection: "row",
+                          justifyContent: "space-between",
+                          paddingVertical: 6,
+                          paddingHorizontal: 8,
+                          backgroundColor: idx % 2 === 0 ? "#f9fafb" : "#ffffff",
+                          borderLeftWidth: veh.level === "HIGH" ? 3 : veh.level === "MEDIUM" ? 2 : 1,
+                          borderLeftColor:
+                            veh.level === "HIGH" ? "#dc2626" : veh.level === "MEDIUM" ? "#eab308" : "#22c55e",
+                          marginBottom: 2,
+                        }}
+                      >
+                        <View style={{ flexDirection: "row", flex: 1 }}>
+                          <Text style={{ fontSize: 9, color: "#6b7280", width: 25 }}>
+                            #{idx + 1}
+                          </Text>
+                          <Text style={{ fontSize: 10, fontWeight: veh.level === "HIGH" ? "bold" : "normal", flex: 1 }}>
+                            {veh.vehiculo}
+                          </Text>
+                        </View>
+                        <View style={{ flexDirection: "row", gap: 10 }}>
+                          <Text style={{ fontSize: 9, color: "#6b7280", width: 40 }}>
+                            Score: {veh.score.toFixed(1)}
+                          </Text>
+                          <Text
+                            style={{
+                              fontSize: 9,
+                              color:
+                                veh.level === "HIGH" ? "#dc2626" : veh.level === "MEDIUM" ? "#eab308" : "#22c55e",
+                              fontWeight: "bold",
+                              width: 50,
+                            }}
+                          >
+                            {veh.level}
+                          </Text>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                </>
+              )}
+            </View>
+            <Text style={styles.pageNumber} render={({ pageNumber }) => `Página ${pageNumber}`} fixed />
+          </Page>
+        )}
+
+        {/* 8. Gráficos de Contexto */}
+        <Page size="A4" style={styles.page}>
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>ANÁLISIS DE CONTEXTO</Text>
+            
+            <Text style={styles.subsectionTitle}>Distribución por Tipo de Evento</Text>
+            {Object.entries(eventosPorTipo).map(([tipo, cantidad]) => (
+              <View key={tipo} style={{ marginBottom: 8 }}>
+                <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 3 }}>
+                  <Text style={{ fontSize: 10 }}>{tipo}</Text>
+                  <Text style={{ fontSize: 10, fontWeight: "bold" }}>{cantidad}</Text>
+                </View>
+                <View style={{ height: 6, backgroundColor: "#e5e7eb", borderRadius: 2 }}>
+                  <View
+                    style={{
+                      height: 6,
+                      backgroundColor: tipo === "D1" ? "#dc2626" : tipo === "D3" ? "#ea580c" : "#6b7280",
+                      width: `${(cantidad / totalEventos) * 100}%`,
+                      borderRadius: 2,
+                    }}
+                  />
+                </View>
+              </View>
+            ))}
+
+            <Text style={[styles.subsectionTitle, { marginTop: 20 }]}>Distribución por Franja Horaria</Text>
+            {Object.entries(eventosPorFranja).map(([franja, cantidad]) => (
+              <View key={franja} style={{ marginBottom: 8 }}>
+                <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 3 }}>
+                  <Text style={{ fontSize: 10 }}>{franja}h</Text>
+                  <Text style={{ fontSize: 10, fontWeight: "bold" }}>{cantidad}</Text>
+                </View>
+                <View style={{ height: 6, backgroundColor: "#e5e7eb", borderRadius: 2 }}>
+                  <View
+                    style={{
+                      height: 6,
+                      backgroundColor: "#3b82f6",
+                      width: `${totalEventos > 0 ? (cantidad / totalEventos) * 100 : 0}%`,
+                      borderRadius: 2,
+                    }}
+                  />
+                </View>
+              </View>
+            ))}
+          </View>
+          <Text style={styles.pageNumber} render={({ pageNumber }) => `Página ${pageNumber}`} fixed />
+        </Page>
+
+        {/* 9. Recomendaciones Finales */}
+        {recomendaciones.length > 0 && (
+          <Page size="A4" style={styles.page}>
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>RECOMENDACIONES</Text>
+              {recomendaciones.map((rec, idx) => (
+                <View key={idx} style={styles.recommendationBox}>
+                  <Text style={{ fontSize: 11, lineHeight: 1.6 }}>
+                    {idx + 1}. {rec}
+                  </Text>
+                </View>
+              ))}
+            </View>
+            <Text style={styles.pageNumber} render={({ pageNumber }) => `Página ${pageNumber}`} fixed />
+          </Page>
+        )}
+      </Document>
+    )
+  }
+
+  // Modo técnico (original)
   return (
     <Document>
       {/* Portada */}

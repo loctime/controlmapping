@@ -19,6 +19,24 @@ export interface RiskScoreByVehicle extends RiskScore {
   vehiculo: string
 }
 
+export interface RiskDrivers {
+  fatigaPct: number
+  velocidadPct: number
+  reincidenciaPct: number
+}
+
+export interface RiskDriversByOperator {
+  id: string
+  operador: string
+  drivers: RiskDrivers
+}
+
+export interface RiskDriversByVehicle {
+  id: string
+  vehiculo: string
+  drivers: RiskDrivers
+}
+
 /**
  * Calcula el score de riesgo para un conjunto de eventos
  * Reglas:
@@ -188,4 +206,177 @@ export function calculateRiskScoreByVehicle(
 
   // Ordenar de mayor a menor riesgo
   return scores.sort((a, b) => b.score - a.score)
+}
+
+/**
+ * Calcula los factores de riesgo (drivers) por operador
+ * Los drivers explican qué contribuye al score de riesgo:
+ * - Fatiga: eventos D1 (5 puntos cada uno)
+ * - Velocidad: velocidad >= 80 km/h (2 puntos cada uno)
+ * - Reincidencia: eventos D3 (3 puntos cada uno)
+ * 
+ * Los porcentajes suman 100% basándose en la contribución real al score
+ */
+export function calculateRiskDriversByOperator(
+  eventos: VehiculoEvento[]
+): RiskDriversByOperator[] {
+  // Agrupar eventos por operador
+  const eventosPorOperador: Record<string, VehiculoEvento[]> = {}
+
+  eventos.forEach((evento) => {
+    const operador = evento.operador?.trim() || "Sin operador"
+    if (!eventosPorOperador[operador]) {
+      eventosPorOperador[operador] = []
+    }
+    eventosPorOperador[operador].push(evento)
+  })
+
+  const drivers: RiskDriversByOperator[] = []
+
+  Object.entries(eventosPorOperador).forEach(([operador, eventosOperador]) => {
+    // Calcular puntos por factor
+    let puntosFatiga = 0
+    let puntosVelocidad = 0
+    let puntosReincidencia = 0
+
+    eventosOperador.forEach((evento) => {
+      // Fatiga: eventos D1 aportan 5 puntos
+      if (evento.evento?.trim() === "D1") {
+        puntosFatiga += 5
+      }
+      // Reincidencia: eventos D3 aportan 3 puntos
+      else if (evento.evento?.trim() === "D3") {
+        puntosReincidencia += 3
+      }
+
+      // Velocidad: velocidad >= 80 aporta 2 puntos
+      if (evento.velocidad >= 80) {
+        puntosVelocidad += 2
+      }
+    })
+
+    // Calcular total de puntos
+    const totalPuntos = puntosFatiga + puntosVelocidad + puntosReincidencia
+
+    // Normalizar a porcentajes (suman 100%)
+    let fatigaPct = 0
+    let velocidadPct = 0
+    let reincidenciaPct = 0
+
+    if (totalPuntos > 0) {
+      fatigaPct = Math.round((puntosFatiga / totalPuntos) * 100 * 10) / 10
+      velocidadPct = Math.round((puntosVelocidad / totalPuntos) * 100 * 10) / 10
+      reincidenciaPct = Math.round((puntosReincidencia / totalPuntos) * 100 * 10) / 10
+
+      // Ajustar para que sumen exactamente 100% (por redondeo)
+      const suma = fatigaPct + velocidadPct + reincidenciaPct
+      if (suma !== 100) {
+        const diferencia = 100 - suma
+        // Agregar la diferencia al factor más grande
+        if (fatigaPct >= velocidadPct && fatigaPct >= reincidenciaPct) {
+          fatigaPct += diferencia
+        } else if (velocidadPct >= reincidenciaPct) {
+          velocidadPct += diferencia
+        } else {
+          reincidenciaPct += diferencia
+        }
+      }
+    }
+
+    drivers.push({
+      id: operador,
+      operador,
+      drivers: {
+        fatigaPct,
+        velocidadPct,
+        reincidenciaPct,
+      },
+    })
+  })
+
+  return drivers
+}
+
+/**
+ * Calcula los factores de riesgo (drivers) por vehículo
+ * Misma lógica que por operador
+ */
+export function calculateRiskDriversByVehicle(
+  eventos: VehiculoEvento[]
+): RiskDriversByVehicle[] {
+  // Agrupar eventos por vehículo
+  const eventosPorVehiculo: Record<string, VehiculoEvento[]> = {}
+
+  eventos.forEach((evento) => {
+    const vehiculo = evento.vehiculo?.trim() || "Sin vehículo"
+    if (!eventosPorVehiculo[vehiculo]) {
+      eventosPorVehiculo[vehiculo] = []
+    }
+    eventosPorVehiculo[vehiculo].push(evento)
+  })
+
+  const drivers: RiskDriversByVehicle[] = []
+
+  Object.entries(eventosPorVehiculo).forEach(([vehiculo, eventosVehiculo]) => {
+    // Calcular puntos por factor
+    let puntosFatiga = 0
+    let puntosVelocidad = 0
+    let puntosReincidencia = 0
+
+    eventosVehiculo.forEach((evento) => {
+      // Fatiga: eventos D1 aportan 5 puntos
+      if (evento.evento?.trim() === "D1") {
+        puntosFatiga += 5
+      }
+      // Reincidencia: eventos D3 aportan 3 puntos
+      else if (evento.evento?.trim() === "D3") {
+        puntosReincidencia += 3
+      }
+
+      // Velocidad: velocidad >= 80 aporta 2 puntos
+      if (evento.velocidad >= 80) {
+        puntosVelocidad += 2
+      }
+    })
+
+    // Calcular total de puntos
+    const totalPuntos = puntosFatiga + puntosVelocidad + puntosReincidencia
+
+    // Normalizar a porcentajes (suman 100%)
+    let fatigaPct = 0
+    let velocidadPct = 0
+    let reincidenciaPct = 0
+
+    if (totalPuntos > 0) {
+      fatigaPct = Math.round((puntosFatiga / totalPuntos) * 100 * 10) / 10
+      velocidadPct = Math.round((puntosVelocidad / totalPuntos) * 100 * 10) / 10
+      reincidenciaPct = Math.round((puntosReincidencia / totalPuntos) * 100 * 10) / 10
+
+      // Ajustar para que sumen exactamente 100% (por redondeo)
+      const suma = fatigaPct + velocidadPct + reincidenciaPct
+      if (suma !== 100) {
+        const diferencia = 100 - suma
+        // Agregar la diferencia al factor más grande
+        if (fatigaPct >= velocidadPct && fatigaPct >= reincidenciaPct) {
+          fatigaPct += diferencia
+        } else if (velocidadPct >= reincidenciaPct) {
+          velocidadPct += diferencia
+        } else {
+          reincidenciaPct += diferencia
+        }
+      }
+    }
+
+    drivers.push({
+      id: vehiculo,
+      vehiculo,
+      drivers: {
+        fatigaPct,
+        velocidadPct,
+        reincidenciaPct,
+      },
+    })
+  })
+
+  return drivers
 }

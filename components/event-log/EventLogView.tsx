@@ -16,6 +16,8 @@ import { SecurityAlertBanner } from "./SecurityAlertBanner"
 import { VehiculoEventosPdfReport } from "./VehiculoEventosPdfReport"
 import { EventChartsSection } from "./EventChartsSection"
 import { ExecutiveSummary } from "./ExecutiveSummary"
+import { RiskPriorityPanel } from "./RiskPriorityPanel"
+import { RiskDriversPanel } from "./RiskDriversPanel"
 import { RiskRankingOperators } from "./RiskRankingOperators"
 import { RiskRankingVehicles } from "./RiskRankingVehicles"
 
@@ -282,6 +284,12 @@ export function EventLogView({ data }: EventLogViewProps) {
         kpisEjecutivos={kpisEjecutivos}
         securityAlert={securityAlert}
       />
+
+      {/* Panel de Prioridades de Riesgo */}
+      <RiskPriorityPanel eventos={allEventos} />
+
+      {/* Panel de Factores de Riesgo */}
+      <RiskDriversPanel eventos={allEventos} />
 
       {/* Sección de gráficos */}
       <EventChartsSection eventos={allEventos} />

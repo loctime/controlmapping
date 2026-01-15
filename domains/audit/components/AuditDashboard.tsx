@@ -897,7 +897,7 @@ export function AuditDashboard({ auditFiles }: AuditDashboardProps) {
       </Card>
 
       {/* Incumplimientos detectados */}
-      <NonComplianceList items={allItems} />
+      <NonComplianceList items={allItems} auditFiles={auditFiles} />
 
       {/* Estadísticas Ejecutivas */}
       <div className="grid gap-6 md:grid-cols-2">

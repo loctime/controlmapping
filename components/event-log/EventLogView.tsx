@@ -8,6 +8,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ScrollArea } from "@/components/ui/scroll-area"
 import type { VehiculoEventosFile, VehiculoEvento } from "@/domains/vehiculo/types"
 import { format } from "date-fns"
+import { pdf } from "@react-pdf/renderer"
+import { FileDown } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { generateSecurityBanner } from "./securityAlerts"
+import { SecurityAlertBanner } from "./SecurityAlertBanner"
+import { VehiculoEventosPdfReport } from "./VehiculoEventosPdfReport"
 
 interface EventLogViewProps {
   data: VehiculoEventosFile[]
@@ -79,6 +85,11 @@ export function EventLogView({ data }: EventLogViewProps) {
   // Verificar si hay filtros activos
   const filtrosActivos = filtroTipoEvento !== "all" || filtroOperador !== "all" || filtroVehiculo !== "all"
 
+  // Generar alerta de seguridad
+  const securityAlert = useMemo(() => {
+    return generateSecurityBanner(allEventos)
+  }, [allEventos])
+
   // Formatear fecha
   const formatFecha = (fecha: Date) => {
     try {
@@ -88,8 +99,34 @@ export function EventLogView({ data }: EventLogViewProps) {
     }
   }
 
+  // Función para exportar PDF
+  const handleExportPdf = async () => {
+    try {
+      const pdfDoc = <VehiculoEventosPdfReport data={data} securityAlert={securityAlert} />
+      const blob = await pdf(pdfDoc).toBlob()
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.href = url
+      link.download = `reporte-eventos-vehiculares-${new Date().toISOString().split("T")[0]}.pdf`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error("Error al generar PDF:", error)
+      alert("Error al generar el PDF. Por favor, intentá nuevamente.")
+    }
+  }
+
   return (
     <div className="space-y-6">
+      {/* Botón de exportar PDF */}
+      <div className="flex justify-end">
+        <Button onClick={handleExportPdf} className="gap-2">
+          <FileDown className="h-4 w-4" />
+          Exportar PDF
+        </Button>
+      </div>
       {/* Resumen superior */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card className="p-4">
@@ -127,6 +164,9 @@ export function EventLogView({ data }: EventLogViewProps) {
           </div>
         </Card>
       </div>
+
+      {/* Banner de alerta de seguridad */}
+      <SecurityAlertBanner alert={securityAlert} />
 
       {/* Filtros */}
       <Card className="p-4">

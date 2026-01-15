@@ -16,6 +16,8 @@ import { SecurityAlertBanner } from "./SecurityAlertBanner"
 import { VehiculoEventosPdfReport } from "./VehiculoEventosPdfReport"
 import { EventChartsSection } from "./EventChartsSection"
 import { ExecutiveSummary } from "./ExecutiveSummary"
+import { RiskRankingOperators } from "./RiskRankingOperators"
+import { RiskRankingVehicles } from "./RiskRankingVehicles"
 
 interface EventLogViewProps {
   data: VehiculoEventosFile[]
@@ -283,6 +285,12 @@ export function EventLogView({ data }: EventLogViewProps) {
 
       {/* Sección de gráficos */}
       <EventChartsSection eventos={allEventos} />
+
+      {/* Rankings de Riesgo */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <RiskRankingOperators eventos={allEventos} />
+        <RiskRankingVehicles eventos={allEventos} />
+      </div>
 
       {/* Filtros */}
       <Card className="p-4">

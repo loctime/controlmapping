@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Label } from "@/components/ui/label"
-import type { AuditFile } from "@/parsers/auditParser"
+import type { AuditFile } from "@/domains/audit"
 
 /**
  * Helpers para obtener métricas oficiales desde headers

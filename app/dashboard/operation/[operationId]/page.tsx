@@ -1,9 +1,9 @@
 "use client"
 
 import { use, useEffect, useState } from "react"
-import { OperationDashboard } from "@/components/OperationDashboard"
+import { OperationDashboard } from "@/domains/audit/components/OperationDashboard"
 import { Card } from "@/components/ui/card"
-import type { AuditFile } from "@/parsers/auditParser"
+import type { AuditFile } from "@/domains/audit"
 
 /**
  * Página de dashboard por operación

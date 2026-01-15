@@ -1,31 +1,6 @@
 import * as XLSX from "xlsx"
 import type { ExcelData, SchemaTemplate, SchemaInstance, DataType } from "@/types/excel"
-
-// ============================================================================
-// TIPOS DE DOMINIO
-// ============================================================================
-
-export interface AuditItem {
-  pregunta: string
-  estado: "cumple" | "cumple_parcial" | "no_cumple" | "no_aplica"
-  observaciones?: string
-}
-
-export interface AuditTotals {
-  totalItems: number
-  cumple: number
-  cumple_parcial: number
-  no_cumple: number
-  no_aplica: number
-  porcentajeCumplimiento: number
-}
-
-export interface AuditFile {
-  fileName: string
-  headers: Record<string, string | number | Date | null>
-  items: AuditItem[]
-  totals: AuditTotals
-}
+import type { AuditItem, AuditTotals, AuditFile } from "./types"
 
 // ============================================================================
 // HELPERS INTERNOS
@@ -503,4 +478,3 @@ export function parseAudit(
     totals,
   }
 }
-

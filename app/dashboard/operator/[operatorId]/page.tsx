@@ -1,9 +1,9 @@
 "use client"
 
 import { use, useEffect, useState } from "react"
-import { OperatorDashboard } from "@/components/OperatorDashboard"
+import { OperatorDashboard } from "@/domains/audit/components/OperatorDashboard"
 import { Card } from "@/components/ui/card"
-import type { AuditFile } from "@/parsers/auditParser"
+import type { AuditFile } from "@/domains/audit"
 
 /**
  * Página de dashboard por operario

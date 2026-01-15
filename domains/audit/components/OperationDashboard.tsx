@@ -10,8 +10,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { TrendingUp, FileCheck, AlertTriangle, CheckCircle2, Info, ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import type { AuditFile } from "@/parsers/auditParser"
-import { useDashboardMetrics } from "@/hooks/useDashboardMetrics"
+import type { AuditFile } from "@/domains/audit"
+import { useAuditMetrics } from "@/domains/audit/hooks/useAuditMetrics"
 import { normalizeDate } from "@/utils/date"
 import Link from "next/link"
 
@@ -74,7 +74,7 @@ export function OperationDashboard({
   }, [auditFiles, operationId])
 
   // Calcular métricas usando el hook
-  const metrics = useDashboardMetrics(auditFiles, { operationId })
+  const metrics = useAuditMetrics(auditFiles, { operationId })
 
   // Obtener nombre de la operación
   const operationName = useMemo(() => {

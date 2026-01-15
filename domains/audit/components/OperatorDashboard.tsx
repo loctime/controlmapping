@@ -10,8 +10,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { TrendingUp, FileCheck, AlertTriangle, CheckCircle2, Info, ArrowLeft, User, ChevronDown, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
-import type { AuditFile } from "@/parsers/auditParser"
-import { useDashboardMetrics } from "@/hooks/useDashboardMetrics"
+import type { AuditFile } from "@/domains/audit"
+import { useAuditMetrics } from "@/domains/audit/hooks/useAuditMetrics"
 import { normalizeDate } from "@/utils/date"
 import Link from "next/link"
 
@@ -61,7 +61,7 @@ export function OperatorDashboard({
   }, [auditFiles, operatorId])
 
   // Calcular métricas usando el hook
-  const metrics = useDashboardMetrics(auditFiles, { operatorId })
+  const metrics = useAuditMetrics(auditFiles, { operatorId })
 
   // Obtener nombre del operario
   const operatorName = useMemo(() => {

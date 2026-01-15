@@ -1,5 +1,5 @@
 import { useMemo } from "react"
-import type { AuditFile } from "@/parsers/auditParser"
+import type { AuditFile } from "@/domains/audit"
 import { normalizeDate } from "@/utils/date"
 
 /**
@@ -345,7 +345,7 @@ export function calculateDistribution(
 /**
  * Hook para calcular métricas del dashboard
  */
-export function useDashboardMetrics(
+export function useAuditMetrics(
   audits: AuditFile[],
   filters?: MetricFilters
 ) {

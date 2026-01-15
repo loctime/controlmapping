@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
-import type { AuditFile } from "@/parsers/auditParser"
+import type { AuditFile } from "@/domains/audit"
 import {
   normalizeDate,
   formatDateDDMMAA,
@@ -674,4 +674,3 @@ export function AuditCalendar({ auditFiles }: AuditCalendarProps) {
     </Card>
   )
 }
-

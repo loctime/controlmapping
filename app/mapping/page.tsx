@@ -10,7 +10,7 @@ import { Header } from "@/components/header"
 import { MultiFileUpload } from "@/components/multi-file-upload"
 import { ResultTable } from "@/components/result-table"
 import { saveSchemaTemplate } from "@/lib/firebase"
-import { parseAudit, type AuditFile } from "@/parsers/auditParser"
+import { parseAudit, type AuditFile } from "@/domains/audit"
 import type { CellMapping, ExcelData, SchemaTemplate, SchemaInstance, SchemaFieldMapping } from "@/types/excel"
 
 // Schema Template de Auditoría

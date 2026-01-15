@@ -19,8 +19,9 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { getSchemaTemplate } from "@/lib/firebase"
 import type { SchemaInstance, SchemaTemplate, SchemaFieldMapping, ExcelData } from "@/types/excel"
 import { getDomain } from "@/domains/registry"
-// Importar dominio de auditoría para que se registre automáticamente
+// Importar dominios para que se registren automáticamente
 import "@/domains/audit"
+import "@/domains/vehiculo"
 import type { AuditFile } from "@/domains/audit"
 import { Loader2, ChevronDown, ChevronUp, FileSpreadsheet } from "lucide-react"
 import { normalizeDate } from "@/utils/date"

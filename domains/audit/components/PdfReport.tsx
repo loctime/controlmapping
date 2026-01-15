@@ -36,6 +36,11 @@ interface PdfReportData {
     noCumple: number
     cumpleParcial: number
   }
+  observaciones: Array<{
+    pregunta: string
+    estado: "no_cumple" | "cumple_parcial"
+    observacion: string
+  }>
   periodoAnalizado: {
     fechaInicio?: Date
     fechaFin?: Date
@@ -202,7 +207,6 @@ const styles = StyleSheet.create({
   barFill: {
     height: 20,
     borderRadius: 2,
-    marginRight: 10,
   },
   barValue: {
     fontSize: 10,
@@ -259,34 +263,98 @@ const styles = StyleSheet.create({
     fontSize: 9,
     color: "#9ca3af",
   },
+  pieVisual: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    marginVertical: 20,
+    flexWrap: "wrap",
+  },
+  pieSegment: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    marginHorizontal: 8,
+    marginVertical: 5,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  pieSegmentLabel: {
+    fontSize: 8,
+    color: "#ffffff",
+    fontWeight: "bold",
+    textAlign: "center",
+  },
+  pieLegend: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "flex-start",
+    marginTop: 15,
+  },
+  pieLegendItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
+    width: "48%",
+    paddingRight: 5,
+  },
+  observationTable: {
+    marginTop: 10,
+  },
+  observationRow: {
+    flexDirection: "row",
+    borderBottomWidth: 1,
+    borderBottomStyle: "solid",
+    borderBottomColor: "#e5e7eb",
+    paddingVertical: 8,
+    paddingHorizontal: 5,
+  },
+  observationCell: {
+    fontSize: 9,
+    paddingHorizontal: 5,
+  },
+  observationCellPregunta: {
+    flex: 2,
+  },
+  observationCellEstado: {
+    flex: 1,
+    fontWeight: "bold",
+  },
+  observationCellObservacion: {
+    flex: 3,
+  },
 })
 
-// Componente para gráfico de barras simple
+// Componente para gráfico de barras mejorado
 const SimpleBarChart: React.FC<{
   data: Array<{ label: string; value: number; color?: string }>
   maxValue?: number
 }> = ({ data, maxValue }) => {
-  const max = maxValue || Math.max(...data.map((d) => d.value))
+  const max = maxValue || Math.max(...data.map((d) => d.value), 1)
   const colors = ["#3b82f6", "#22c55e", "#eab308", "#ef4444", "#6b7280"]
 
   return (
     <View style={styles.barChart}>
       {data.map((item, index) => {
-        const width = `${(item.value / max) * 100}%`
+        const percentage = (item.value / max) * 100
+        const barWidth = Math.max(percentage, 5) // Mínimo 5% para visibilidad
         const color = item.color || colors[index % colors.length]
         return (
           <View key={index} style={styles.bar}>
-            <Text style={styles.barLabel}>{item.label}</Text>
+            <Text style={styles.barLabel}>{item.label.substring(0, 35)}</Text>
             <View style={styles.barContainer}>
-              <View
-                style={[
-                  styles.barFill,
-                  {
-                    width,
-                    backgroundColor: color,
-                  },
-                ]}
-              />
+              <View style={{ flex: 1, marginRight: 10 }}>
+                <View
+                  style={[
+                    styles.barFill,
+                    {
+                      width: `${barWidth}%`,
+                      backgroundColor: color,
+                      minWidth: 20,
+                    },
+                  ]}
+                />
+              </View>
               <Text style={styles.barValue}>{item.value.toFixed(1)}%</Text>
             </View>
           </View>
@@ -296,19 +364,43 @@ const SimpleBarChart: React.FC<{
   )
 }
 
-// Componente para gráfico de pie simple (representado como lista)
+// Componente para gráfico de pie mejorado con representación visual
 const SimplePieChart: React.FC<{
   data: Array<{ name: string; value: number; color: string }>
 }> = ({ data }) => {
   const total = data.reduce((sum, item) => sum + item.value, 0)
 
   return (
-    <View style={styles.pieChart}>
-      {data.map((item, index) => {
-        const percentage = total > 0 ? (item.value / total) * 100 : 0
-        return (
-          <View key={index} style={styles.pieItem}>
-            <View style={styles.pieRow}>
+    <View>
+      {/* Representación visual con círculos proporcionales */}
+      <View style={styles.pieVisual}>
+        {data.map((item, index) => {
+          const percentage = total > 0 ? (item.value / total) * 100 : 0
+          const radius = 25 + (percentage / 100) * 20 // Radio proporcional al porcentaje
+          return (
+            <View
+              key={index}
+              style={[
+                styles.pieSegment,
+                {
+                  width: radius * 2,
+                  height: radius * 2,
+                  borderRadius: radius,
+                  backgroundColor: item.color,
+                },
+              ]}
+            >
+              <Text style={styles.pieSegmentLabel}>{percentage.toFixed(0)}%</Text>
+            </View>
+          )
+        })}
+      </View>
+      {/* Leyenda detallada */}
+      <View style={styles.pieLegend}>
+        {data.map((item, index) => {
+          const percentage = total > 0 ? (item.value / total) * 100 : 0
+          return (
+            <View key={index} style={styles.pieLegendItem}>
               <View
                 style={[
                   styles.pieColorBox,
@@ -317,14 +409,16 @@ const SimplePieChart: React.FC<{
                   },
                 ]}
               />
-              <Text style={{ fontSize: 10, fontWeight: "bold" }}>{item.name}</Text>
+              <View style={{ marginLeft: 5, flex: 1 }}>
+                <Text style={{ fontSize: 9, fontWeight: "bold" }}>{item.name}</Text>
+                <Text style={{ fontSize: 8, color: "#6b7280" }}>
+                  {item.value.toLocaleString()} ({percentage.toFixed(1)}%)
+                </Text>
+              </View>
             </View>
-            <Text style={{ fontSize: 10, marginLeft: 23 }}>
-              {item.value.toLocaleString()} ({percentage.toFixed(1)}%)
-            </Text>
-          </View>
-        )
-      })}
+          )
+        })}
+      </View>
     </View>
   )
 }
@@ -570,10 +664,76 @@ export const PdfReport: React.FC<PdfReportProps> = ({ data }) => {
         <Text style={styles.pageNumber} render={({ pageNumber }) => `Página ${pageNumber}`} fixed />
       </Page>
 
+      {/* Resumen de Observaciones */}
+      {data.observaciones.length > 0 && (
+        <Page size="A4" style={styles.page}>
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>7. Incumplimientos con Observaciones</Text>
+
+            <Text style={styles.subsectionTitle}>
+              Ítems con observaciones detalladas ({data.observaciones.length} total)
+            </Text>
+
+            <View style={styles.observationTable}>
+              {/* Encabezado de tabla */}
+              <View style={[styles.observationRow, styles.tableHeader]}>
+                <Text style={[styles.observationCell, styles.observationCellPregunta, { fontWeight: "bold" }]}>
+                  Pregunta
+                </Text>
+                <Text style={[styles.observationCell, styles.observationCellEstado, { fontWeight: "bold" }]}>
+                  Estado
+                </Text>
+                <Text style={[styles.observationCell, styles.observationCellObservacion, { fontWeight: "bold" }]}>
+                  Observación
+                </Text>
+              </View>
+
+              {/* Filas de datos - limitar a 12 items */}
+              {data.observaciones.slice(0, 12).map((item, index) => (
+                <View key={index} style={styles.observationRow}>
+                  <Text style={[styles.observationCell, styles.observationCellPregunta]}>
+                    {item.pregunta.substring(0, 60)}
+                    {item.pregunta.length > 60 ? "..." : ""}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.observationCell,
+                      styles.observationCellEstado,
+                      {
+                        color: item.estado === "no_cumple" ? "#dc2626" : "#ea580c",
+                      },
+                    ]}
+                  >
+                    {item.estado === "no_cumple" ? "No Cumple" : "Cumple Parcial"}
+                  </Text>
+                  <Text style={[styles.observationCell, styles.observationCellObservacion]}>
+                    {item.observacion.substring(0, 100)}
+                    {item.observacion.length > 100 ? "..." : ""}
+                  </Text>
+                </View>
+              ))}
+            </View>
+
+            {data.observaciones.length > 12 && (
+              <View style={{ marginTop: 15, padding: 10, backgroundColor: "#f9fafb", borderRadius: 4 }}>
+                <Text style={{ fontSize: 10, color: "#6b7280", fontStyle: "italic" }}>
+                  Existen {data.observaciones.length - 12} ítem{data.observaciones.length - 12 !== 1 ? "s" : ""}{" "}
+                  adicional{data.observaciones.length - 12 !== 1 ? "es" : ""} con observaciones que no se muestran en este resumen.
+                </Text>
+              </View>
+            )}
+          </View>
+
+          <Text style={styles.pageNumber} render={({ pageNumber }) => `Página ${pageNumber}`} fixed />
+        </Page>
+      )}
+
       {/* Resumen de Incumplimientos */}
       <Page size="A4" style={styles.page}>
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>7. Resumen de Incumplimientos</Text>
+          <Text style={styles.sectionTitle}>
+            {data.observaciones.length > 0 ? "8. Resumen de Incumplimientos" : "7. Resumen de Incumplimientos"}
+          </Text>
 
           <View style={styles.kpiGrid}>
             <View style={styles.kpiCard}>

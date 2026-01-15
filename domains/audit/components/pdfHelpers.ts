@@ -44,6 +44,11 @@ export interface PdfReportData {
     noCumple: number
     cumpleParcial: number
   }
+  observaciones: Array<{
+    pregunta: string
+    estado: "no_cumple" | "cumple_parcial"
+    observacion: string
+  }>
   periodoAnalizado: {
     fechaInicio?: Date
     fechaFin?: Date
@@ -83,6 +88,7 @@ export function preparePdfData(auditFiles: AuditFile[]): PdfReportData {
         noCumple: 0,
         cumpleParcial: 0,
       },
+      observaciones: [],
       periodoAnalizado: {},
     }
   }
@@ -317,6 +323,20 @@ export function preparePdfData(auditFiles: AuditFile[]): PdfReportData {
     (item) => item.estado === "cumple_parcial"
   )
 
+  // Filtrar items con observaciones
+  const itemsConObservaciones = nonComplianceItems
+    .filter(
+      (item) =>
+        item.observaciones &&
+        item.observaciones.trim().length > 0 &&
+        (item.estado === "no_cumple" || item.estado === "cumple_parcial")
+    )
+    .map((item) => ({
+      pregunta: item.pregunta,
+      estado: item.estado as "no_cumple" | "cumple_parcial",
+      observacion: item.observaciones || "",
+    }))
+
   // Período analizado
   const fechas = auditFiles
     .map((file) => normalizeDate(file.headers.fecha))
@@ -395,6 +415,7 @@ export function preparePdfData(auditFiles: AuditFile[]): PdfReportData {
       noCumple: noCumpleItems.length,
       cumpleParcial: cumpleParcialItems.length,
     },
+    observaciones: itemsConObservaciones,
     periodoAnalizado,
   }
 }

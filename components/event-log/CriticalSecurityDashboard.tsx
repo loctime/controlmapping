@@ -4,8 +4,8 @@ import { useMemo } from "react"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
-import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, ResponsiveContainer } from "recharts"
-import { AlertTriangle, Eye, Car, Users, Gauge } from "lucide-react"
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, ResponsiveContainer, LabelList } from "recharts"
+import { AlertTriangle, Eye, Car, Users, Gauge, AlertCircle } from "lucide-react"
 import type { VehiculoEvento } from "@/domains/vehiculo/types"
 import { countD1D3 } from "./riskModel"
 
@@ -119,6 +119,9 @@ export function CriticalSecurityDashboard({ eventos }: CriticalSecurityDashboard
     // Eventos de fatiga (D1)
     const eventosFatiga = eventos.filter((e) => e.evento?.trim() === "D1").length
 
+    // Eventos de distracción (D3)
+    const eventosDistraccion = eventos.filter((e) => e.evento?.trim() === "D3").length
+
     // Vehículos únicos
     const vehiculosUnicos = new Set(
       eventos
@@ -140,6 +143,7 @@ export function CriticalSecurityDashboard({ eventos }: CriticalSecurityDashboard
     return {
       eventosCriticos,
       eventosFatiga,
+      eventosDistraccion,
       vehiculosUnicos,
       operadoresUnicos,
       velocidadMaxima,
@@ -200,103 +204,149 @@ export function CriticalSecurityDashboard({ eventos }: CriticalSecurityDashboard
   }
 
   return (
-    <div id="alert-dashboard-export" className="bg-gray-100 min-h-screen p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
-        {/* BLOQUE SUPERIOR — ALERTA PRINCIPAL */}
+    <div id="alert-dashboard-export" className="bg-gray-50 min-h-screen p-8">
+      <div className="max-w-7xl mx-auto space-y-8">
+        {/* BLOQUE SUPERIOR — ALERTA PRINCIPAL (HERO BANNER) */}
         {criticalAlert && (
-          <Card className="w-full bg-red-50 border-red-200 rounded-lg shadow-sm p-6">
-            <div className="flex items-start gap-4">
+          <Card className="w-full rounded-2xl shadow-xl border border-red-200/50 overflow-hidden bg-gradient-to-br from-[#FEE2E2] via-[#FFF5F5] to-white p-8">
+            <div className="flex items-start gap-6">
+              {/* Ícono grande en círculo */}
               <div className="flex-shrink-0">
-                <AlertTriangle className="h-8 w-8 text-red-600" />
+                <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center shadow-sm">
+                  <AlertTriangle className="h-10 w-10 text-red-600" strokeWidth={2.5} />
+                </div>
               </div>
-              <div className="flex-1">
-                <div className="flex items-center gap-3 mb-2">
-                  <h2 className="text-xl font-bold text-red-800">
-                    ALERTA CRÍTICA DE SEGURIDAD
-                  </h2>
-                  <Badge className="bg-red-600 text-white px-3 py-1 text-xs font-semibold uppercase">
+              
+              {/* Contenido */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start justify-between gap-6 mb-3">
+                  <div className="flex-1">
+                    <h2 className="text-2xl font-bold text-red-900 mb-3 tracking-tight">
+                      ALERTA CRÍTICA DE SEGURIDAD
+                    </h2>
+                    <p className="text-base text-red-800 leading-relaxed">
+                      Conductor <span className="font-semibold">{criticalAlert.operador}</span> registró múltiples eventos de fatiga el{" "}
+                      <span className="font-semibold">{formatFecha(criticalAlert.fecha)}</span>. Riesgo alto de accidente.
+                    </p>
+                  </div>
+                  <Badge className="bg-red-600 hover:bg-red-700 text-white px-5 py-2.5 text-xs font-bold uppercase tracking-wider rounded-full shadow-lg flex-shrink-0">
                     CRÍTICA
                   </Badge>
                 </div>
-                <p className="text-sm text-red-700">
-                  Conductor {criticalAlert.operador} registró múltiples eventos de fatiga el{" "}
-                  {formatFecha(criticalAlert.fecha)}. Riesgo alto de accidente.
-                </p>
               </div>
             </div>
           </Card>
         )}
 
-        {/* BLOQUE KPIs — INDICADORES CLAVE */}
-        <div className="grid grid-cols-2 gap-4">
+        {/* FILA 2: KPIs PRINCIPALES (3 columnas) */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Eventos críticos */}
-          <Card className="p-4 bg-white rounded-lg shadow-sm">
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <AlertTriangle className="h-5 w-5 text-red-600" />
-                <p className="text-sm font-medium text-gray-600">Eventos críticos</p>
+          <Card className="p-6 bg-white rounded-2xl shadow-md border-0 hover:shadow-lg transition-shadow">
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
+                  <AlertTriangle className="h-6 w-6 text-red-600" strokeWidth={2.5} />
+                </div>
+                <p className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Eventos críticos</p>
               </div>
-              <p className="text-3xl font-bold text-gray-900">{kpis.eventosCriticos}</p>
-              <p className="text-xs text-gray-500">Fatiga y distracción</p>
+              <div>
+                <p className="text-4xl font-bold text-gray-900 mb-1">{kpis.eventosCriticos}</p>
+                <p className="text-xs text-gray-500 font-medium">Fatiga y distracción</p>
+              </div>
             </div>
           </Card>
 
           {/* Eventos de fatiga */}
-          <Card className="p-4 bg-white rounded-lg shadow-sm">
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <Eye className="h-5 w-5 text-pink-500" />
-                <p className="text-sm font-medium text-gray-600">Eventos de fatiga</p>
+          <Card className="p-6 bg-white rounded-2xl shadow-md border-0 hover:shadow-lg transition-shadow">
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-full bg-orange-100 flex items-center justify-center">
+                  <Eye className="h-6 w-6 text-orange-600" strokeWidth={2.5} />
+                </div>
+                <p className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Eventos de fatiga</p>
               </div>
-              <p className="text-3xl font-bold text-gray-900">{kpis.eventosFatiga}</p>
-              <p className="text-xs text-gray-500">Parpadeo pesado</p>
+              <div>
+                <p className="text-4xl font-bold text-gray-900 mb-1">{kpis.eventosFatiga}</p>
+                <p className="text-xs text-gray-500 font-medium">Parpadeo pesado</p>
+              </div>
             </div>
           </Card>
 
-          {/* Vehículos únicos */}
-          <Card className="p-4 bg-white rounded-lg shadow-sm">
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <Car className="h-5 w-5 text-gray-600" />
-                <p className="text-sm font-medium text-gray-600">Vehículos únicos</p>
+          {/* Eventos de distracción */}
+          <Card className="p-6 bg-white rounded-2xl shadow-md border-0 hover:shadow-lg transition-shadow">
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-full bg-yellow-100 flex items-center justify-center">
+                  <AlertCircle className="h-6 w-6 text-yellow-600" strokeWidth={2.5} />
+                </div>
+                <p className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Eventos de distracción</p>
               </div>
-              <p className="text-3xl font-bold text-gray-900">{kpis.vehiculosUnicos}</p>
+              <div>
+                <p className="text-4xl font-bold text-gray-900 mb-1">{kpis.eventosDistraccion}</p>
+                <p className="text-xs text-gray-500 font-medium">Sin mirar al frente</p>
+              </div>
+            </div>
+          </Card>
+        </div>
+
+        {/* FILA 3: KPIs OPERATIVOS (3 columnas) */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Vehículos únicos */}
+          <Card className="p-6 bg-white rounded-2xl shadow-md border-0 hover:shadow-lg transition-shadow">
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center">
+                  <Car className="h-6 w-6 text-gray-600" strokeWidth={2.5} />
+                </div>
+                <p className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Vehículos únicos</p>
+              </div>
+              <div>
+                <p className="text-4xl font-bold text-gray-900">{kpis.vehiculosUnicos}</p>
+              </div>
             </div>
           </Card>
 
           {/* Operadores únicos */}
-          <Card className="p-4 bg-white rounded-lg shadow-sm">
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <Users className="h-5 w-5 text-gray-600" />
-                <p className="text-sm font-medium text-gray-600">Operadores únicos</p>
+          <Card className="p-6 bg-white rounded-2xl shadow-md border-0 hover:shadow-lg transition-shadow">
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center">
+                  <Users className="h-6 w-6 text-gray-600" strokeWidth={2.5} />
+                </div>
+                <p className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Operadores únicos</p>
               </div>
-              <p className="text-3xl font-bold text-gray-900">{kpis.operadoresUnicos}</p>
+              <div>
+                <p className="text-4xl font-bold text-gray-900">{kpis.operadoresUnicos}</p>
+              </div>
             </div>
           </Card>
 
           {/* Velocidad máxima */}
-          <Card className="p-4 bg-white rounded-lg shadow-sm">
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <Gauge className="h-5 w-5 text-gray-600" />
-                <p className="text-sm font-medium text-gray-600">Velocidad máxima</p>
+          <Card className="p-6 bg-white rounded-2xl shadow-md border-0 hover:shadow-lg transition-shadow">
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center">
+                  <Gauge className="h-6 w-6 text-gray-600" strokeWidth={2.5} />
+                </div>
+                <p className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Velocidad máxima</p>
               </div>
-              <p className="text-3xl font-bold text-gray-900">
-                {kpis.velocidadMaxima > 0 ? `${kpis.velocidadMaxima} km/h` : "-"}
-              </p>
+              <div>
+                <p className="text-4xl font-bold text-gray-900">
+                  {kpis.velocidadMaxima > 0 ? `${kpis.velocidadMaxima} km/h` : "-"}
+                </p>
+              </div>
             </div>
           </Card>
         </div>
 
         {/* BLOQUE GRÁFICOS (2 COLUMNAS) */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* 3A — EVENTOS POR TIPO (IZQUIERDA) */}
-          <Card className="p-6 bg-white rounded-lg shadow-sm">
-            <h3 className="text-lg font-semibold mb-4 text-gray-900">Eventos por tipo</h3>
+          <Card className="p-8 bg-white rounded-2xl shadow-md border-0">
+            <h3 className="text-xl font-bold mb-6 text-gray-900">Eventos por tipo</h3>
             {eventosPorTipo.length > 0 ? (
-              <div className="space-y-4">
-                <ChartContainer config={chartConfig} className="h-[250px]">
+              <div className="space-y-6">
+                <ChartContainer config={chartConfig} className="h-[280px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
@@ -305,62 +355,85 @@ export function CriticalSecurityDashboard({ eventos }: CriticalSecurityDashboard
                         nameKey="name"
                         cx="50%"
                         cy="50%"
-                        outerRadius={80}
-                        label={({ porcentaje }) => `${porcentaje.toFixed(1)}%`}
+                        outerRadius={100}
+                        innerRadius={40}
+                        label={({ name, porcentaje }) => `${name}: ${porcentaje.toFixed(1)}%`}
+                        labelLine={false}
                       >
                         {eventosPorTipo.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} />
+                          <Cell key={`cell-${index}`} fill={entry.color} stroke={entry.color} strokeWidth={2} />
                         ))}
                       </Pie>
-                      <ChartTooltip content={<ChartTooltipContent />} />
+                      <ChartTooltip 
+                        content={<ChartTooltipContent />}
+                        formatter={(value: number, name: string) => [`${value} eventos`, name]}
+                      />
                     </PieChart>
                   </ResponsiveContainer>
                 </ChartContainer>
-                <div className="flex justify-center gap-4">
+                <div className="flex justify-center gap-6 pt-2">
                   {eventosPorTipo.map((entry, index) => (
                     <div key={index} className="flex items-center gap-2">
                       <div
-                        className="w-3 h-3 rounded-full"
+                        className="w-4 h-4 rounded-full shadow-sm"
                         style={{ backgroundColor: entry.color }}
                       />
-                      <span className="text-sm text-gray-600">{entry.name}</span>
+                      <span className="text-sm font-medium text-gray-700">{entry.name}</span>
                     </div>
                   ))}
                 </div>
               </div>
             ) : (
-              <div className="h-[250px] flex items-center justify-center">
+              <div className="h-[280px] flex items-center justify-center">
                 <p className="text-sm text-gray-500">No hay datos para mostrar</p>
               </div>
             )}
           </Card>
 
           {/* 3B — EVENTOS POR FRANJA HORARIA (DERECHA) */}
-          <Card className="p-6 bg-white rounded-lg shadow-sm">
-            <h3 className="text-lg font-semibold mb-4 text-gray-900">
+          <Card className="p-8 bg-white rounded-2xl shadow-md border-0">
+            <h3 className="text-xl font-bold mb-6 text-gray-900">
               Eventos por franja horaria
             </h3>
             {eventosPorFranja.some((f) => f.eventos > 0) ? (
-              <ChartContainer config={chartConfig} className="h-[250px]">
+              <ChartContainer config={chartConfig} className="h-[280px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={eventosPorFranja}>
+                  <BarChart data={eventosPorFranja} margin={{ top: 20, right: 10, left: 0, bottom: 0 }}>
                     <XAxis
                       dataKey="franja"
-                      tick={{ fontSize: 12 }}
-                      tickFormatter={(value) => value}
+                      tick={{ fontSize: 13, fontWeight: 600, fill: "#374151" }}
+                      tickLine={false}
+                      axisLine={false}
                     />
-                    <YAxis tick={{ fontSize: 12 }} />
-                    <ChartTooltip content={<ChartTooltipContent />} />
-                    <Bar dataKey="eventos">
+                    <YAxis 
+                      tick={{ fontSize: 12, fill: "#6b7280" }}
+                      tickLine={false}
+                      axisLine={false}
+                    />
+                    <ChartTooltip 
+                      content={<ChartTooltipContent />}
+                      formatter={(value: number) => [`${value} eventos`, ""]}
+                    />
+                    <Bar 
+                      dataKey="eventos" 
+                      radius={[8, 8, 0, 0]}
+                      barSize={60}
+                    >
                       {eventosPorFranja.map((entry, index) => (
                         <Cell key={index} fill={getBarColor(entry.franja)} />
                       ))}
+                      <LabelList 
+                        dataKey="eventos" 
+                        position="top" 
+                        formatter={(value: number) => value}
+                        style={{ fontSize: 12, fontWeight: 600, fill: "#374151" }}
+                      />
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </ChartContainer>
             ) : (
-              <div className="h-[250px] flex items-center justify-center">
+              <div className="h-[280px] flex items-center justify-center">
                 <p className="text-sm text-gray-500">No hay datos para mostrar</p>
               </div>
             )}

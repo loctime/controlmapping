@@ -14,14 +14,14 @@ interface KpiCardProps {
   className?: string
 }
 
-// Mapeo de colores semánticos para el icono decorativo
+// Mapeo de colores semánticos para el icono decorativo con alpha translúcido
 const decorativeIconColors = {
-  critical: "text-red-500",
-  warning: "text-orange-500",
-  yellow: "text-yellow-500",
-  ok: "text-green-500",
-  info: "text-blue-500",
-  gray: "text-gray-400",
+  critical: "rgba(252,165,165,0.45)", // red-300 con alpha
+  warning: "rgba(253,186,116,0.45)", // orange-300 con alpha
+  yellow: "rgba(253,224,71,0.45)", // yellow-300 con alpha
+  ok: "rgba(134,239,172,0.45)", // green-300 con alpha
+  info: "rgba(147,197,253,0.45)", // blue-300 con alpha
+  gray: "rgba(203,213,225,0.45)", // slate-300 con alpha
 }
 
 export function KpiCard({
@@ -37,8 +37,8 @@ export function KpiCard({
   return (
     <Card
       className={cn(
-        "p-6 bg-gradient-to-br from-white via-white to-gray-50 rounded-2xl shadow-md border-0",
-        "hover:shadow-2xl hover:scale-[1.02]",
+        "p-6 bg-gradient-to-br from-white via-white to-gray-50 rounded-2xl shadow-md border border-gray-200/60",
+        "hover:shadow-xl hover:scale-[1.02]",
         "transition-all duration-200",
         "relative overflow-hidden",
         "min-h-[140px]",
@@ -51,8 +51,16 @@ export function KpiCard({
       </div>
 
       {/* Icono grande decorativo de fondo (top-right) */}
-      <div className="absolute right-[-20px] top-[10px] opacity-[0.18] pointer-events-none z-0">
-        <Icon className={cn("h-40 w-40", decorativeColor)} strokeWidth={1} />
+      <div className="absolute right-[-60px] top-[0px] pointer-events-none z-0">
+        <Icon
+          className="h-[190px] w-[190px]"
+          strokeWidth={1.8}
+          style={{
+            stroke: decorativeColor,
+            filter: "blur(0.4px)",
+            transform: "rotate(8deg)",
+          }}
+        />
       </div>
 
       {/* Contenido principal */}
@@ -66,7 +74,7 @@ export function KpiCard({
 
         {/* Texto descriptivo */}
         <div className="space-y-1">
-          <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide">
+          <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
             {title}
           </p>
           {subtitle && (

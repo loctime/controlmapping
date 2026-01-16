@@ -206,11 +206,11 @@ export function CriticalSecurityDashboard({ eventos }: CriticalSecurityDashboard
   }
 
   return (
-    <div id="alert-dashboard-export" className="bg-gray-50 min-h-screen p-8">
+    <div id="alert-dashboard-export" className="bg-gradient-to-br from-slate-50 via-gray-50 to-slate-100 min-h-screen p-8">
       <div className="max-w-7xl mx-auto space-y-8">
         {/* BLOQUE SUPERIOR — ALERTA PRINCIPAL (HERO BANNER) */}
         {criticalAlert && (
-          <Card className="w-full rounded-2xl shadow-xl border border-red-200/50 overflow-hidden bg-gradient-to-br from-[#FEE2E2] via-[#FFF5F5] to-white p-8">
+          <Card className="w-full rounded-2xl shadow-xl border border-red-300/60 overflow-hidden bg-gradient-to-br from-red-50 via-red-50/80 to-red-100/50 p-8">
             <div className="flex items-start gap-6">
               {/* Ícono grande en círculo con animación */}
               <div className="flex-shrink-0">
@@ -221,10 +221,10 @@ export function CriticalSecurityDashboard({ eventos }: CriticalSecurityDashboard
               <div className="flex-1 min-w-0">
                 <div className="flex items-start justify-between gap-6 mb-3">
                   <div className="flex-1">
-                    <h2 className="text-2xl font-bold text-red-900 mb-3 tracking-tight">
+                    <h2 className="text-2xl font-bold text-red-950 mb-3 tracking-tight">
                       ALERTA CRÍTICA DE SEGURIDAD
                     </h2>
-                    <p className="text-base text-red-800 leading-relaxed">
+                    <p className="text-base text-red-900 leading-relaxed">
                       Conductor <span className="font-semibold">{criticalAlert.operador}</span> registró múltiples eventos de fatiga el{" "}
                       <span className="font-semibold">{formatFecha(criticalAlert.fecha)}</span>. Riesgo alto de accidente.
                     </p>
@@ -298,7 +298,7 @@ export function CriticalSecurityDashboard({ eventos }: CriticalSecurityDashboard
         {/* BLOQUE GRÁFICOS (2 COLUMNAS) */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* 3A — EVENTOS POR TIPO (IZQUIERDA) */}
-          <Card className="p-8 bg-white rounded-2xl shadow-md border-0">
+          <Card className="p-8 bg-white rounded-2xl shadow-md border border-gray-200/60 hover:shadow-xl transition-shadow">
             <h3 className="text-xl font-bold mb-6 text-gray-900">Eventos por tipo</h3>
             {eventosPorTipo.length > 0 ? (
               <div className="space-y-6">
@@ -334,7 +334,7 @@ export function CriticalSecurityDashboard({ eventos }: CriticalSecurityDashboard
                         className="w-4 h-4 rounded-full shadow-sm"
                         style={{ backgroundColor: entry.color }}
                       />
-                      <span className="text-sm font-medium text-gray-700">{entry.name}</span>
+                      <span className="text-sm font-medium text-gray-600">{entry.name}</span>
                     </div>
                   ))}
                 </div>
@@ -347,7 +347,7 @@ export function CriticalSecurityDashboard({ eventos }: CriticalSecurityDashboard
           </Card>
 
           {/* 3B — EVENTOS POR FRANJA HORARIA (DERECHA) */}
-          <Card className="p-8 bg-white rounded-2xl shadow-md border-0">
+          <Card className="p-8 bg-white rounded-2xl shadow-md border border-gray-200/60 hover:shadow-xl transition-shadow">
             <h3 className="text-xl font-bold mb-6 text-gray-900">
               Eventos por franja horaria
             </h3>
@@ -357,12 +357,12 @@ export function CriticalSecurityDashboard({ eventos }: CriticalSecurityDashboard
                   <BarChart data={eventosPorFranja} margin={{ top: 20, right: 10, left: 0, bottom: 0 }}>
                     <XAxis
                       dataKey="franja"
-                      tick={{ fontSize: 13, fontWeight: 600, fill: "#374151" }}
+                      tick={{ fontSize: 14, fontWeight: 700, fill: "#111827" }}
                       tickLine={false}
                       axisLine={false}
                     />
                     <YAxis 
-                      tick={{ fontSize: 12, fill: "#6b7280" }}
+                      tick={{ fontSize: 13, fontWeight: 600, fill: "#374151" }}
                       tickLine={false}
                       axisLine={false}
                     />

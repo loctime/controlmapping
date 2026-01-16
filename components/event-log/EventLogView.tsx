@@ -23,6 +23,8 @@ import { RiskPriorityPanel } from "./RiskPriorityPanel"
 import { RiskDriversPanel } from "./RiskDriversPanel"
 import { RiskRankingOperators } from "./RiskRankingOperators"
 import { RiskRankingVehicles } from "./RiskRankingVehicles"
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+import { CriticalSecurityDashboard } from "./CriticalSecurityDashboard"
 
 interface EventLogViewProps {
   data: VehiculoEventosFile[]
@@ -221,6 +223,21 @@ export function EventLogView({ data }: EventLogViewProps) {
           Análisis de telemetría y seguridad
         </p>
       </div>
+
+      {/* Tabs para alternar entre vistas */}
+      <Tabs defaultValue="completo" className="w-full">
+        <TabsList className="grid w-full max-w-md grid-cols-2">
+          <TabsTrigger value="completo">Vista Completa</TabsTrigger>
+          <TabsTrigger value="dashboard">Dashboard Visual</TabsTrigger>
+        </TabsList>
+
+        {/* Tab: Dashboard Visual */}
+        <TabsContent value="dashboard" className="mt-6">
+          <CriticalSecurityDashboard eventos={allEventos} />
+        </TabsContent>
+
+        {/* Tab: Vista Completa */}
+        <TabsContent value="completo" className="mt-6 space-y-6">
 
       {/* KPIs básicos */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -490,6 +507,8 @@ export function EventLogView({ data }: EventLogViewProps) {
           </TooltipContent>
         </Tooltip>
       </div>
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }

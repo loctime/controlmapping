@@ -5,9 +5,11 @@ import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, ResponsiveContainer, LabelList } from "recharts"
-import { AlertTriangle, Eye, Car, Users, Gauge, AlertCircle } from "lucide-react"
+import { AlertTriangle, Eye, Car, Users, Gauge, EyeOff, Activity } from "lucide-react"
 import type { VehiculoEvento } from "@/domains/vehiculo/types"
 import { countD1D3 } from "./riskModel"
+import { DashboardIcon } from "./DashboardIcon"
+import { KpiCard } from "./KpiCard"
 
 interface CriticalSecurityDashboardProps {
   eventos: VehiculoEvento[]
@@ -210,11 +212,9 @@ export function CriticalSecurityDashboard({ eventos }: CriticalSecurityDashboard
         {criticalAlert && (
           <Card className="w-full rounded-2xl shadow-xl border border-red-200/50 overflow-hidden bg-gradient-to-br from-[#FEE2E2] via-[#FFF5F5] to-white p-8">
             <div className="flex items-start gap-6">
-              {/* Ícono grande en círculo */}
+              {/* Ícono grande en círculo con animación */}
               <div className="flex-shrink-0">
-                <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center shadow-sm">
-                  <AlertTriangle className="h-10 w-10 text-red-600" strokeWidth={2.5} />
-                </div>
+                <DashboardIcon icon={AlertTriangle} color="critical" size="lg" animate={true} />
               </div>
               
               {/* Contenido */}
@@ -241,102 +241,58 @@ export function CriticalSecurityDashboard({ eventos }: CriticalSecurityDashboard
         {/* FILA 2: KPIs PRINCIPALES (3 columnas) */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Eventos críticos */}
-          <Card className="p-6 bg-white rounded-2xl shadow-md border-0 hover:shadow-lg transition-shadow">
-            <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
-                  <AlertTriangle className="h-6 w-6 text-red-600" strokeWidth={2.5} />
-                </div>
-                <p className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Eventos críticos</p>
-              </div>
-              <div>
-                <p className="text-4xl font-bold text-gray-900 mb-1">{kpis.eventosCriticos}</p>
-                <p className="text-xs text-gray-500 font-medium">Fatiga y distracción</p>
-              </div>
-            </div>
-          </Card>
+          <KpiCard
+            icon={Activity}
+            iconColor="critical"
+            value={kpis.eventosCriticos}
+            title="Eventos críticos"
+            subtitle="Fatiga y distracción"
+          />
 
           {/* Eventos de fatiga */}
-          <Card className="p-6 bg-white rounded-2xl shadow-md border-0 hover:shadow-lg transition-shadow">
-            <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-full bg-orange-100 flex items-center justify-center">
-                  <Eye className="h-6 w-6 text-orange-600" strokeWidth={2.5} />
-                </div>
-                <p className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Eventos de fatiga</p>
-              </div>
-              <div>
-                <p className="text-4xl font-bold text-gray-900 mb-1">{kpis.eventosFatiga}</p>
-                <p className="text-xs text-gray-500 font-medium">Parpadeo pesado</p>
-              </div>
-            </div>
-          </Card>
+          <KpiCard
+            icon={Eye}
+            iconColor="warning"
+            value={kpis.eventosFatiga}
+            title="Eventos de fatiga"
+            subtitle="Parpadeo pesado"
+          />
 
           {/* Eventos de distracción */}
-          <Card className="p-6 bg-white rounded-2xl shadow-md border-0 hover:shadow-lg transition-shadow">
-            <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-full bg-yellow-100 flex items-center justify-center">
-                  <AlertCircle className="h-6 w-6 text-yellow-600" strokeWidth={2.5} />
-                </div>
-                <p className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Eventos de distracción</p>
-              </div>
-              <div>
-                <p className="text-4xl font-bold text-gray-900 mb-1">{kpis.eventosDistraccion}</p>
-                <p className="text-xs text-gray-500 font-medium">Sin mirar al frente</p>
-              </div>
-            </div>
-          </Card>
+          <KpiCard
+            icon={EyeOff}
+            iconColor="yellow"
+            value={kpis.eventosDistraccion}
+            title="Eventos de distracción"
+            subtitle="Sin mirar al frente"
+          />
         </div>
 
         {/* FILA 3: KPIs OPERATIVOS (3 columnas) */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Vehículos únicos */}
-          <Card className="p-6 bg-white rounded-2xl shadow-md border-0 hover:shadow-lg transition-shadow">
-            <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center">
-                  <Car className="h-6 w-6 text-gray-600" strokeWidth={2.5} />
-                </div>
-                <p className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Vehículos únicos</p>
-              </div>
-              <div>
-                <p className="text-4xl font-bold text-gray-900">{kpis.vehiculosUnicos}</p>
-              </div>
-            </div>
-          </Card>
+          <KpiCard
+            icon={Car}
+            iconColor="gray"
+            value={kpis.vehiculosUnicos}
+            title="Vehículos únicos"
+          />
 
           {/* Operadores únicos */}
-          <Card className="p-6 bg-white rounded-2xl shadow-md border-0 hover:shadow-lg transition-shadow">
-            <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center">
-                  <Users className="h-6 w-6 text-gray-600" strokeWidth={2.5} />
-                </div>
-                <p className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Operadores únicos</p>
-              </div>
-              <div>
-                <p className="text-4xl font-bold text-gray-900">{kpis.operadoresUnicos}</p>
-              </div>
-            </div>
-          </Card>
+          <KpiCard
+            icon={Users}
+            iconColor="gray"
+            value={kpis.operadoresUnicos}
+            title="Operadores únicos"
+          />
 
           {/* Velocidad máxima */}
-          <Card className="p-6 bg-white rounded-2xl shadow-md border-0 hover:shadow-lg transition-shadow">
-            <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center">
-                  <Gauge className="h-6 w-6 text-gray-600" strokeWidth={2.5} />
-                </div>
-                <p className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Velocidad máxima</p>
-              </div>
-              <div>
-                <p className="text-4xl font-bold text-gray-900">
-                  {kpis.velocidadMaxima > 0 ? `${kpis.velocidadMaxima} km/h` : "-"}
-                </p>
-              </div>
-            </div>
-          </Card>
+          <KpiCard
+            icon={Gauge}
+            iconColor="gray"
+            value={kpis.velocidadMaxima > 0 ? `${kpis.velocidadMaxima} km/h` : "-"}
+            title="Velocidad máxima"
+          />
         </div>
 
         {/* BLOQUE GRÁFICOS (2 COLUMNAS) */}

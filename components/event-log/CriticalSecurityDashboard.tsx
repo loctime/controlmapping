@@ -1,15 +1,23 @@
 "use client"
 
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, ResponsiveContainer, LabelList } from "recharts"
-import { AlertTriangle, Eye, Car, Users, Gauge, EyeOff, Activity } from "lucide-react"
+import { AlertTriangle, Eye, Car, Users, Gauge, EyeOff, Activity, Download, FileImage, FileText, Loader2 } from "lucide-react"
 import type { VehiculoEvento } from "@/domains/vehiculo/types"
 import { countD1D3 } from "./riskModel"
 import { DashboardIcon } from "./DashboardIcon"
 import { KpiCard } from "./KpiCard"
+import { exportDashboardPNG, exportDashboardPDF } from "./exportDashboard"
 
 interface CriticalSecurityDashboardProps {
   eventos: VehiculoEvento[]
@@ -108,6 +116,8 @@ function calcularEventosPorFranja(eventos: VehiculoEvento[]) {
 }
 
 export function CriticalSecurityDashboard({ eventos }: CriticalSecurityDashboardProps) {
+  const [isExporting, setIsExporting] = useState(false)
+
   // Verificar alerta crítica
   const criticalAlert = useMemo(() => checkCriticalAlert(eventos), [eventos])
 
@@ -205,9 +215,67 @@ export function CriticalSecurityDashboard({ eventos }: CriticalSecurityDashboard
     },
   }
 
+  const handleExportPNG = async () => {
+    setIsExporting(true)
+    try {
+      await exportDashboardPNG("alert-dashboard-export")
+    } catch (error) {
+      console.error("Error al exportar PNG:", error)
+      alert("Error al exportar la imagen. Por favor, intentá nuevamente.")
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
+  const handleExportPDF = async () => {
+    setIsExporting(true)
+    try {
+      await exportDashboardPDF("alert-dashboard-export")
+    } catch (error) {
+      console.error("Error al exportar PDF:", error)
+      alert("Error al exportar el PDF. Por favor, intentá nuevamente.")
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
   return (
     <div id="alert-dashboard-export" className="bg-gradient-to-br from-slate-50 via-gray-50 to-slate-100 min-h-screen p-8">
       <div className="max-w-7xl mx-auto space-y-8">
+        {/* Botón de exportación */}
+        <div className="flex justify-end">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                disabled={isExporting}
+                className="gap-2"
+              >
+                {isExporting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Exportando...
+                  </>
+                ) : (
+                  <>
+                    <Download className="h-4 w-4" />
+                    Exportar
+                  </>
+                )}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={handleExportPNG} disabled={isExporting}>
+                <FileImage className="h-4 w-4 mr-2" />
+                Exportar Imagen (PNG)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleExportPDF} disabled={isExporting}>
+                <FileText className="h-4 w-4 mr-2" />
+                Exportar PDF
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
         {/* BLOQUE SUPERIOR — ALERTA PRINCIPAL (HERO BANNER) */}
         {criticalAlert && (
           <Card className="w-full rounded-2xl shadow-xl border border-red-300/60 overflow-hidden bg-gradient-to-br from-red-50 via-red-50/80 to-red-100/50 p-8">

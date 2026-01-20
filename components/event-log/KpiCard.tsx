@@ -2,6 +2,7 @@
 
 import { LucideIcon } from "lucide-react"
 import { Card } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
 import { DashboardIcon } from "./DashboardIcon"
 import { cn } from "@/lib/utils"
 
@@ -12,6 +13,7 @@ interface KpiCardProps {
   title: string
   subtitle?: string
   className?: string
+  highlight?: { label: string; tone?: "critical" | "warning" | "yellow" | "neutral" }
 }
 
 // Mapeo de colores semánticos para el icono decorativo con alpha translúcido
@@ -24,6 +26,14 @@ const decorativeIconColors = {
   gray: "rgba(203,213,225,0.45)", // slate-300 con alpha
 }
 
+// Mapeo de colores para el Badge highlight
+const highlightColors = {
+  critical: "bg-red-600 hover:bg-red-700 text-white border-red-700",
+  warning: "bg-orange-600 hover:bg-orange-700 text-white border-orange-700",
+  yellow: "bg-yellow-500 hover:bg-yellow-600 text-white border-yellow-600",
+  neutral: "bg-gray-600 hover:bg-gray-700 text-white border-gray-700",
+}
+
 export function KpiCard({
   icon: Icon,
   iconColor = "gray",
@@ -31,8 +41,11 @@ export function KpiCard({
   title,
   subtitle,
   className,
+  highlight,
 }: KpiCardProps) {
   const decorativeColor = decorativeIconColors[iconColor]
+  const highlightTone = highlight?.tone || "neutral"
+  const highlightClassName = highlightColors[highlightTone]
 
   return (
     <Card
@@ -45,6 +58,15 @@ export function KpiCard({
         className
       )}
     >
+      {/* Badge highlight en esquina superior derecha */}
+      {highlight && (
+        <div className="absolute top-4 right-4 z-20">
+          <Badge className={cn("font-semibold text-xs px-2.5 py-1 border shadow-sm", highlightClassName)}>
+            {highlight.label}
+          </Badge>
+        </div>
+      )}
+
       {/* Icono pequeño funcional arriba izquierda */}
       <div className="absolute top-4 left-4 z-10">
         <DashboardIcon icon={Icon} color={iconColor} size="sm" />

@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useMemo, useState, useEffect, useCallback, useRef } from "react"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -21,6 +21,11 @@ import { exportDashboardPNG, exportDashboardPDF } from "./exportDashboard"
 
 interface CriticalSecurityDashboardProps {
   eventos: VehiculoEvento[]
+  hideExportButton?: boolean
+  onExportFunctionsReady?: (functions: {
+    exportPNG: () => Promise<void>
+    exportPDF: () => Promise<void>
+  }) => void
 }
 
 /**
@@ -195,7 +200,11 @@ function obtenerOperadorPrincipal(eventos: VehiculoEvento[]): string {
   return operadorPrincipal
 }
 
-export function CriticalSecurityDashboard({ eventos }: CriticalSecurityDashboardProps) {
+export function CriticalSecurityDashboard({ 
+  eventos, 
+  hideExportButton = false,
+  onExportFunctionsReady 
+}: CriticalSecurityDashboardProps) {
   const [isExporting, setIsExporting] = useState(false)
 
   // Verificar alerta crítica
@@ -323,7 +332,7 @@ export function CriticalSecurityDashboard({ eventos }: CriticalSecurityDashboard
     },
   }
 
-  const handleExportPNG = async () => {
+  const handleExportPNG = useCallback(async () => {
     setIsExporting(true)
     try {
       await exportDashboardPNG("alert-dashboard-export")
@@ -333,9 +342,9 @@ export function CriticalSecurityDashboard({ eventos }: CriticalSecurityDashboard
     } finally {
       setIsExporting(false)
     }
-  }
+  }, [])
 
-  const handleExportPDF = async () => {
+  const handleExportPDF = useCallback(async () => {
     setIsExporting(true)
     try {
       await exportDashboardPDF("alert-dashboard-export")
@@ -345,45 +354,69 @@ export function CriticalSecurityDashboard({ eventos }: CriticalSecurityDashboard
     } finally {
       setIsExporting(false)
     }
-  }
+  }, [])
+
+  // Ref para evitar llamadas repetidas al callback
+  const exportFunctionsRef = useRef<{
+    exportPNG: () => Promise<void>
+    exportPDF: () => Promise<void>
+  } | null>(null)
+
+  // Actualizar ref cuando cambian las funciones
+  useEffect(() => {
+    exportFunctionsRef.current = {
+      exportPNG: handleExportPNG,
+      exportPDF: handleExportPDF,
+    }
+  }, [handleExportPNG, handleExportPDF])
+
+  // Exponer funciones de exportación al componente padre
+  useEffect(() => {
+    if (onExportFunctionsReady && exportFunctionsRef.current) {
+      // Solo llamar si las funciones han cambiado realmente
+      onExportFunctionsReady(exportFunctionsRef.current)
+    }
+  }, [onExportFunctionsReady])
 
   return (
     <div id="alert-dashboard-export" className="bg-gradient-to-br from-slate-50 via-gray-50 to-slate-100 min-h-screen p-8">
       <div className="max-w-7xl mx-auto space-y-8">
-        {/* Botón de exportación */}
-        <div className="flex justify-end">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="outline"
-                disabled={isExporting}
-                className="gap-2"
-              >
-                {isExporting ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Exportando...
-                  </>
-                ) : (
-                  <>
-                    <Download className="h-4 w-4" />
-                    Exportar
-                  </>
-                )}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={handleExportPNG} disabled={isExporting}>
-                <FileImage className="h-4 w-4 mr-2" />
-                Exportar Imagen (PNG)
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleExportPDF} disabled={isExporting}>
-                <FileText className="h-4 w-4 mr-2" />
-                Exportar PDF
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+        {/* Botón de exportación - Solo mostrar si no está oculto */}
+        {!hideExportButton && (
+          <div className="flex justify-end">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  disabled={isExporting}
+                  className="gap-2"
+                >
+                  {isExporting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Exportando...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="h-4 w-4" />
+                      Exportar
+                    </>
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={handleExportPNG} disabled={isExporting}>
+                  <FileImage className="h-4 w-4 mr-2" />
+                  Exportar Imagen (PNG)
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleExportPDF} disabled={isExporting}>
+                  <FileText className="h-4 w-4 mr-2" />
+                  Exportar PDF
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        )}
 
         {/* Header con información de vehículos */}
         <Card className="p-4 bg-white rounded-xl shadow-sm border border-gray-200/60">

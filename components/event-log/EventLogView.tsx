@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect, useCallback, useRef } from "react"
 import { Card } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
@@ -30,9 +30,26 @@ interface EventLogViewProps {
   data: VehiculoEventosFile[]
   defaultTab?: "completo" | "dashboard"
   hideTabs?: boolean
+  onExportFunctionsReady?: (functions: {
+    exportPdf: () => Promise<void>
+    exportOnePager: () => Promise<void>
+    exportSecurityAlert: () => Promise<void>
+  }) => void
+  onDashboardExportFunctionsReady?: (functions: {
+    exportPNG: () => Promise<void>
+    exportPDF: () => Promise<void>
+  }) => void
+  hideExportButtons?: boolean
 }
 
-export function EventLogView({ data, defaultTab = "completo", hideTabs = false }: EventLogViewProps) {
+export function EventLogView({ 
+  data, 
+  defaultTab = "completo", 
+  hideTabs = false,
+  onExportFunctionsReady,
+  onDashboardExportFunctionsReady,
+  hideExportButtons = false
+}: EventLogViewProps) {
   // Combinar todos los eventos de todos los archivos
   const allEventos = useMemo(() => {
     return data.flatMap((file) => file.eventos)
@@ -154,7 +171,7 @@ export function EventLogView({ data, defaultTab = "completo", hideTabs = false }
   }
 
   // Función para exportar PDF completo
-  const handleExportPdf = async () => {
+  const handleExportPdf = useCallback(async () => {
     try {
       const pdfDoc = <VehiculoEventosPdfReport data={data} securityAlert={securityAlert} />
       const blob = await pdf(pdfDoc).toBlob()
@@ -170,10 +187,10 @@ export function EventLogView({ data, defaultTab = "completo", hideTabs = false }
       console.error("Error al generar PDF:", error)
       alert("Error al generar el PDF. Por favor, intentá nuevamente.")
     }
-  }
+  }, [data, securityAlert])
 
   // Función para exportar One-Pager PDF
-  const handleExportOnePager = async () => {
+  const handleExportOnePager = useCallback(async () => {
     try {
       const pdfDoc = <ExecutiveOnePagerView data={data} securityAlert={securityAlert} />
       const blob = await pdf(pdfDoc).toBlob()
@@ -189,10 +206,10 @@ export function EventLogView({ data, defaultTab = "completo", hideTabs = false }
       console.error("Error al generar One-Pager PDF:", error)
       alert("Error al generar el One-Pager PDF. Por favor, intentá nuevamente.")
     }
-  }
+  }, [data, securityAlert])
 
   // Función para exportar Alerta de Seguridad Vial PDF
-  const handleExportSecurityAlert = async () => {
+  const handleExportSecurityAlert = useCallback(async () => {
     try {
       const pdfDoc = (
         <SecurityAlertPdf
@@ -214,10 +231,48 @@ export function EventLogView({ data, defaultTab = "completo", hideTabs = false }
       console.error("Error al generar Alerta de Seguridad Vial PDF:", error)
       alert("Error al generar el PDF de Alerta de Seguridad Vial. Por favor, intentá nuevamente.")
     }
-  }
+  }, [allEventos, securityAlert, kpisEjecutivos])
+
+  // Ref para evitar llamadas repetidas al callback
+  const exportFunctionsRef = useRef<{
+    exportPdf: () => Promise<void>
+    exportOnePager: () => Promise<void>
+    exportSecurityAlert: () => Promise<void>
+  } | null>(null)
+
+  // Actualizar ref cuando cambian las funciones
+  useEffect(() => {
+    if (defaultTab === "completo") {
+      exportFunctionsRef.current = {
+        exportPdf: handleExportPdf,
+        exportOnePager: handleExportOnePager,
+        exportSecurityAlert: handleExportSecurityAlert,
+      }
+    }
+  }, [defaultTab, handleExportPdf, handleExportOnePager, handleExportSecurityAlert])
+
+  // Exponer funciones de exportación al componente padre según el tab activo
+  useEffect(() => {
+    if (onExportFunctionsReady && defaultTab === "completo" && exportFunctionsRef.current) {
+      // Solo llamar si las funciones han cambiado realmente
+      onExportFunctionsReady(exportFunctionsRef.current)
+    }
+    // Para dashboard, las funciones se exponen a través de CriticalSecurityDashboard
+  }, [onExportFunctionsReady, defaultTab])
 
   // Contenido del tab "Dashboard Visual"
-  const dashboardContent = <CriticalSecurityDashboard eventos={allEventos} />
+  const dashboardContent = (
+    <CriticalSecurityDashboard 
+      eventos={allEventos} 
+      hideExportButton={hideExportButtons}
+      onExportFunctionsReady={(functions) => {
+        // Exponer funciones del dashboard al componente padre
+        if (onDashboardExportFunctionsReady) {
+          onDashboardExportFunctionsReady(functions)
+        }
+      }}
+    />
+  )
 
   // Contenido del tab "Vista Completa"
   const completoContent = (
@@ -465,32 +520,34 @@ export function EventLogView({ data, defaultTab = "completo", hideTabs = false }
         </div>
       </Card>
 
-      {/* Botones de exportación */}
-      <div className="flex justify-end gap-2">
-        <Button onClick={handleExportPdf} className="gap-2" variant="outline">
-          <FileDown className="h-4 w-4" />
-          Exportar PDF Completo
-        </Button>
-        <Button onClick={handleExportOnePager} className="gap-2">
-          <FileDown className="h-4 w-4" />
-          Exportar One-Pager PDF
-        </Button>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              onClick={handleExportSecurityAlert}
-              className="gap-2"
-              variant="destructive"
-            >
-              <AlertTriangle className="h-4 w-4" />
-              Exportar Alerta de Seguridad Vial
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>Documento preventivo para difusión interna</p>
-          </TooltipContent>
-        </Tooltip>
-      </div>
+      {/* Botones de exportación - Solo mostrar si no están ocultos */}
+      {!hideExportButtons && (
+        <div className="flex justify-end gap-2">
+          <Button onClick={handleExportPdf} className="gap-2" variant="outline">
+            <FileDown className="h-4 w-4" />
+            Exportar PDF Completo
+          </Button>
+          <Button onClick={handleExportOnePager} className="gap-2">
+            <FileDown className="h-4 w-4" />
+            Exportar One-Pager PDF
+          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                onClick={handleExportSecurityAlert}
+                className="gap-2"
+                variant="destructive"
+              >
+                <AlertTriangle className="h-4 w-4" />
+                Exportar Alerta de Seguridad Vial
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Documento preventivo para difusión interna</p>
+            </TooltipContent>
+          </Tooltip>
+        </div>
+      )}
     </div>
   )
 

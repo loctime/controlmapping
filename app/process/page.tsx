@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useEffect } from "react"
+import { useState, useMemo, useEffect, useCallback, useRef } from "react"
 import * as XLSX from "xlsx"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -15,6 +15,8 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { getSchemaTemplate, getSchemaTemplates, getMappings } from "@/lib/firebase"
 import type { SchemaInstance, SchemaTemplate, SchemaFieldMapping, ExcelData } from "@/types/excel"
 import { getDomain } from "@/domains/registry"
@@ -24,7 +26,7 @@ import "@/domains/vehiculo"
 import type { AuditFile } from "@/domains/audit"
 import type { VehiculoEventosFile } from "@/domains/vehiculo/types"
 import { EventLogView } from "@/components/event-log/EventLogView"
-import { Loader2, FileSpreadsheet, Upload, X } from "lucide-react"
+import { Loader2, FileSpreadsheet, Upload, X, Download, FileDown, AlertTriangle } from "lucide-react"
 import { normalizeDate } from "@/utils/date"
 
 interface ProcessedResult {
@@ -65,6 +67,19 @@ export default function ProcessPage() {
   
   // Estado para tabs de visualización (Vista completa / Dashboard)
   const [viewTab, setViewTab] = useState<"completo" | "dashboard">("completo")
+  
+  // Funciones de exportación para eventos vehiculares (vista completa)
+  const [vehiculoExportFunctions, setVehiculoExportFunctions] = useState<{
+    exportPdf?: () => Promise<void>
+    exportOnePager?: () => Promise<void>
+    exportSecurityAlert?: () => Promise<void>
+  } | null>(null)
+  
+  // Funciones de exportación para dashboard de eventos vehiculares
+  const [vehiculoDashboardExportFunctions, setVehiculoDashboardExportFunctions] = useState<{
+    exportPNG?: () => Promise<void>
+    exportPDF?: () => Promise<void>
+  } | null>(null)
   
   // Estados para tabs y selecciones de auditorías (solo para dashboard)
   const [activeTab, setActiveTab] = useState<"general" | "operation" | "operator">("general")
@@ -958,6 +973,42 @@ export default function ProcessPage() {
   // Determinar el tipo de datos procesados
   const dataType = vehiculoEventosFiles.length > 0 ? "vehiculos" : auditFiles.length > 0 ? "audit" : results.length > 0 ? "generic" : null
 
+  // Callbacks memorizados para evitar loops infinitos
+  // Usar useRef para comparar si las funciones realmente cambiaron
+  const prevVehiculoExportFunctionsRef = useRef<typeof vehiculoExportFunctions>(null)
+  const handleVehiculoExportFunctionsReady = useCallback((functions: {
+    exportPdf: () => Promise<void>
+    exportOnePager: () => Promise<void>
+    exportSecurityAlert: () => Promise<void>
+  }) => {
+    // Solo actualizar si las funciones realmente cambiaron
+    if (
+      !prevVehiculoExportFunctionsRef.current ||
+      prevVehiculoExportFunctionsRef.current.exportPdf !== functions.exportPdf ||
+      prevVehiculoExportFunctionsRef.current.exportOnePager !== functions.exportOnePager ||
+      prevVehiculoExportFunctionsRef.current.exportSecurityAlert !== functions.exportSecurityAlert
+    ) {
+      prevVehiculoExportFunctionsRef.current = functions
+      setVehiculoExportFunctions(functions)
+    }
+  }, [])
+
+  const prevVehiculoDashboardExportFunctionsRef = useRef<typeof vehiculoDashboardExportFunctions>(null)
+  const handleVehiculoDashboardExportFunctionsReady = useCallback((functions: {
+    exportPNG: () => Promise<void>
+    exportPDF: () => Promise<void>
+  }) => {
+    // Solo actualizar si las funciones realmente cambiaron
+    if (
+      !prevVehiculoDashboardExportFunctionsRef.current ||
+      prevVehiculoDashboardExportFunctionsRef.current.exportPNG !== functions.exportPNG ||
+      prevVehiculoDashboardExportFunctionsRef.current.exportPDF !== functions.exportPDF
+    ) {
+      prevVehiculoDashboardExportFunctionsRef.current = functions
+      setVehiculoDashboardExportFunctions(functions)
+    }
+  }, [])
+
   return (
     <div className="min-h-screen flex flex-col bg-background">
       {/* HEADER FIJO SUPERIOR - Configuración */}
@@ -1183,16 +1234,82 @@ export default function ProcessPage() {
       <div className="flex-1 w-full py-6 px-4">
         {hasProcessedData ? (
           <Tabs value={viewTab} onValueChange={(value) => setViewTab(value as "completo" | "dashboard")} className="w-full">
-            <TabsList className="grid w-full max-w-md grid-cols-2 mb-6">
-              <TabsTrigger value="completo">Vista completa</TabsTrigger>
-              <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
-            </TabsList>
+            {/* Toolbar: Tabs + Botón Exportar */}
+            <div className="flex items-center justify-between mb-6 gap-4">
+              <TabsList className="grid grid-cols-2">
+                <TabsTrigger value="completo">Vista completa</TabsTrigger>
+                <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+              </TabsList>
+              
+              {/* Botón Exportar - Unificado */}
+              {dataType === "vehiculos" && (
+                viewTab === "completo" && vehiculoExportFunctions ? (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="sm" className="gap-2">
+                        <Download className="h-4 w-4" />
+                        Exportar
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      {vehiculoExportFunctions.exportPdf && (
+                        <DropdownMenuItem onClick={vehiculoExportFunctions.exportPdf}>
+                          <FileDown className="h-4 w-4 mr-2" />
+                          Exportar PDF Completo
+                        </DropdownMenuItem>
+                      )}
+                      {vehiculoExportFunctions.exportOnePager && (
+                        <DropdownMenuItem onClick={vehiculoExportFunctions.exportOnePager}>
+                          <FileDown className="h-4 w-4 mr-2" />
+                          Exportar One-Pager PDF
+                        </DropdownMenuItem>
+                      )}
+                      {vehiculoExportFunctions.exportSecurityAlert && (
+                        <DropdownMenuItem onClick={vehiculoExportFunctions.exportSecurityAlert}>
+                          <AlertTriangle className="h-4 w-4 mr-2" />
+                          Exportar Alerta de Seguridad Vial
+                        </DropdownMenuItem>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                ) : viewTab === "dashboard" && vehiculoDashboardExportFunctions ? (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="sm" className="gap-2">
+                        <Download className="h-4 w-4" />
+                        Exportar
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      {vehiculoDashboardExportFunctions.exportPNG && (
+                        <DropdownMenuItem onClick={vehiculoDashboardExportFunctions.exportPNG}>
+                          <FileDown className="h-4 w-4 mr-2" />
+                          Exportar Imagen (PNG)
+                        </DropdownMenuItem>
+                      )}
+                      {vehiculoDashboardExportFunctions.exportPDF && (
+                        <DropdownMenuItem onClick={vehiculoDashboardExportFunctions.exportPDF}>
+                          <FileDown className="h-4 w-4 mr-2" />
+                          Exportar PDF
+                        </DropdownMenuItem>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                ) : null
+              )}
+            </div>
 
             {/* Tab: Vista completa */}
             <TabsContent value="completo" className="space-y-6">
               {dataType === "vehiculos" ? (
                 // Para eventos vehiculares, usar EventLogView con tab "completo" y sin tabs internos
-                <EventLogView data={vehiculoEventosFiles} defaultTab="completo" hideTabs={true} />
+                <EventLogView 
+                  data={vehiculoEventosFiles} 
+                  defaultTab="completo" 
+                  hideTabs={true}
+                  hideExportButtons={true}
+                  onExportFunctionsReady={handleVehiculoExportFunctionsReady}
+                />
               ) : dataType === "audit" ? (
                 // Para auditorías, mostrar calendario y tabla
                 <>
@@ -1224,7 +1341,13 @@ export default function ProcessPage() {
             <TabsContent value="dashboard" className="space-y-6">
               {dataType === "vehiculos" ? (
                 // Para eventos vehiculares, usar EventLogView con tab "dashboard" y sin tabs internos
-                <EventLogView data={vehiculoEventosFiles} defaultTab="dashboard" hideTabs={true} />
+                <EventLogView 
+                  data={vehiculoEventosFiles} 
+                  defaultTab="dashboard" 
+                  hideTabs={true}
+                  hideExportButtons={true}
+                  onDashboardExportFunctionsReady={handleVehiculoDashboardExportFunctionsReady}
+                />
               ) : dataType === "audit" ? (
                 // Para auditorías, mostrar tabs de dashboard
                 <>

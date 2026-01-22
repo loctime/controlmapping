@@ -3,7 +3,7 @@
  * Wrapper de dominio compartido para normalización de fechas
  */
 
-import { parseExcelDate } from "@/lib/normalization"
+import { parseExcelDate } from "@/src/lib/normalization"
 
 export function normalizeDomainDate(value: unknown): Date | null {
   const result = parseExcelDate(value)

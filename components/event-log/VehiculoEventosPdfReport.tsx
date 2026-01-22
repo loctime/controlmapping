@@ -659,7 +659,7 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
           <PdfFooter />
         </Page>
 
-        {/* PÁGINA 2 — RESUMEN EJECUTIVO */}
+        {/* PÁGINA 2 — RESUMEN EJECUTIVO Y ESTADO GENERAL */}
         <Page size="A4" style={styles.page}>
           <View style={styles.sectionSpacer}>
             <Text style={styles.sectionTitle}>RESUMEN EJECUTIVO</Text>
@@ -667,11 +667,9 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
               {resumenEjecutivoTexto}
             </Text>
           </View>
-          <PdfFooter />
-        </Page>
 
-        {/* PÁGINA 3 — ESTADO GENERAL Y KPIs */}
-        <Page size="A4" style={styles.page}>
+          <View style={styles.sectionDivider} />
+
           <View style={styles.sectionSpacer}>
             <Text style={styles.sectionTitle}>ESTADO GENERAL Y KPIs</Text>
             <View style={styles.kpiGrid}>
@@ -717,7 +715,7 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
           <PdfFooter />
         </Page>
 
-        {/* PÁGINA 4 — DISTRIBUCIÓN DE RIESGOS */}
+        {/* PÁGINA 3 — DISTRIBUCIÓN DE RIESGOS */}
         <Page size="A4" style={styles.page}>
           <View style={styles.sectionSpacer}>
             <Text style={styles.sectionTitle}>DISTRIBUCIÓN DE RIESGOS</Text>
@@ -798,7 +796,7 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
           <PdfFooter />
         </Page>
 
-        {/* PÁGINA 5 — FOCOS DE ATENCIÓN */}
+        {/* PÁGINA 4 — FOCOS DE ATENCIÓN */}
         <Page size="A4" style={styles.page}>
           <View style={styles.sectionSpacer}>
             <Text style={styles.sectionTitle}>FOCOS DE ATENCIÓN</Text>
@@ -871,7 +869,7 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
           <PdfFooter />
         </Page>
 
-        {/* PÁGINA 6 — INTERPRETACIÓN Y RECOMENDACIONES */}
+        {/* PÁGINA 5 — INTERPRETACIÓN Y RECOMENDACIONES */}
         <Page size="A4" style={styles.page}>
           <View style={styles.sectionSpacer}>
             <Text style={styles.sectionTitle}>INTERPRETACIÓN Y RECOMENDACIONES</Text>

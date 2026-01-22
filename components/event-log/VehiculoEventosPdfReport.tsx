@@ -130,7 +130,7 @@ const styles = StyleSheet.create({
   text: {
     fontSize: 11,
     lineHeight: 1.6,
-    color: "#374151",
+    color: "#1f2937",
     marginBottom: 10,
   },
   kpiGrid: {
@@ -141,27 +141,96 @@ const styles = StyleSheet.create({
   kpiCard: {
     width: "48%",
     padding: 15,
-    backgroundColor: "#f9fafb",
-    borderWidth: 1,
+    backgroundColor: "#ffffff",
+    borderWidth: 1.5,
     borderStyle: "solid",
-    borderColor: "#e5e7eb",
+    borderColor: "#d1d5db",
     borderRadius: 4,
     marginBottom: 15,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+  },
+  kpiCardFatiga: {
+    width: "48%",
+    padding: 15,
+    backgroundColor: "#fef2f2",
+    borderWidth: 1.5,
+    borderStyle: "solid",
+    borderColor: "#fecaca",
+    borderRadius: 4,
+    marginBottom: 15,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+  },
+  kpiCardDistraccion: {
+    width: "48%",
+    padding: 15,
+    backgroundColor: "#fffbeb",
+    borderWidth: 1.5,
+    borderStyle: "solid",
+    borderColor: "#fed7aa",
+    borderRadius: 4,
+    marginBottom: 15,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+  },
+  kpiCardEntidades: {
+    width: "48%",
+    padding: 15,
+    backgroundColor: "#f0f9ff",
+    borderWidth: 1.5,
+    borderStyle: "solid",
+    borderColor: "#bae6fd",
+    borderRadius: 4,
+    marginBottom: 15,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
   },
   kpiLabel: {
-    fontSize: 10,
-    color: "#6b7280",
-    marginBottom: 5,
+    fontSize: 9,
+    color: "#4b5563",
+    marginBottom: 8,
+    fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
   kpiValue: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: "bold",
-    color: "#1f2937",
+    color: "#111827",
+    marginBottom: 4,
+  },
+  kpiValueFatiga: {
+    fontSize: 28,
+    fontWeight: "bold",
+    color: "#991b1b",
+    marginBottom: 4,
+  },
+  kpiValueDistraccion: {
+    fontSize: 28,
+    fontWeight: "bold",
+    color: "#92400e",
+    marginBottom: 4,
+  },
+  kpiValueEntidades: {
+    fontSize: 28,
+    fontWeight: "bold",
+    color: "#1e40af",
+    marginBottom: 4,
   },
   kpiSubtext: {
     fontSize: 9,
-    color: "#9ca3af",
-    marginTop: 3,
+    color: "#6b7280",
+    marginTop: 2,
+    fontWeight: "normal",
   },
   pageNumber: {
     position: "absolute",
@@ -311,59 +380,90 @@ function generarResumenEjecutivo(
   vehiculosUnicos: number,
   operadoresUnicos: number,
   allEventos: VehiculoEvento[]
-): string {
-  const partes: string[] = []
-
+): React.ReactElement {
   // Estado general
   if (distribution.total === 0) {
-    partes.push("No se registraron eventos de seguridad vial durante el período analizado")
-    partes.push("El estado general es satisfactorio y no se requieren acciones inmediatas")
-    return partes.join(". ") + "."
+    return (
+      <View>
+        <Text style={{ fontSize: 12, lineHeight: 1.8, color: "#1f2937", marginBottom: 12 }}>
+          No se registraron eventos de seguridad vial durante el período analizado.
+        </Text>
+        <Text style={{ fontSize: 12, lineHeight: 1.8, color: "#1f2937" }}>
+          El estado general es satisfactorio y no se requieren acciones inmediatas.
+        </Text>
+      </View>
+    )
   }
 
   // Estado general y nivel de riesgo
   const nivelRiesgo = distribution.total >= 50 ? "elevado" : distribution.total >= 20 ? "moderado" : "bajo"
-  partes.push(
-    `El estado general de seguridad vehicular presenta un nivel de riesgo ${nivelRiesgo} con ${distribution.total.toLocaleString()} evento${distribution.total !== 1 ? "s" : ""} registrado${distribution.total !== 1 ? "s" : ""}`
-  )
-
+  
   // Tendencia dominante
+  let tendenciaTexto: React.ReactElement
   if (distribution.pctFatiga >= 60) {
-    partes.push(
-      `La tendencia dominante es la fatiga (D1), representando el ${distribution.pctFatiga.toFixed(1)}% de los eventos`
+    tendenciaTexto = (
+      <Text>
+        La tendencia dominante es la <Text style={{ fontWeight: "bold" }}>fatiga (D1)</Text>, representando el <Text style={{ fontWeight: "bold" }}>{distribution.pctFatiga.toFixed(1)}%</Text> de los eventos.
+      </Text>
     )
   } else if (distribution.pctDistraccion >= 60) {
-    partes.push(
-      `La tendencia dominante es la distracción (D3), representando el ${distribution.pctDistraccion.toFixed(1)}% de los eventos`
+    tendenciaTexto = (
+      <Text>
+        La tendencia dominante es la <Text style={{ fontWeight: "bold" }}>distracción (D3)</Text>, representando el <Text style={{ fontWeight: "bold" }}>{distribution.pctDistraccion.toFixed(1)}%</Text> de los eventos.
+      </Text>
     )
   } else {
-    partes.push(
-      `Los eventos se distribuyen de manera equilibrada entre fatiga (${distribution.pctFatiga.toFixed(1)}%) y distracción (${distribution.pctDistraccion.toFixed(1)}%)`
+    tendenciaTexto = (
+      <Text>
+        Los eventos se distribuyen de manera equilibrada entre fatiga (<Text style={{ fontWeight: "bold" }}>{distribution.pctFatiga.toFixed(1)}%</Text>) y distracción (<Text style={{ fontWeight: "bold" }}>{distribution.pctDistraccion.toFixed(1)}%</Text>).
+      </Text>
     )
   }
 
   // Principal foco de atención
+  let focoTexto: React.ReactElement
   if (factors.reincidencia > 0) {
-    partes.push(
-      `El principal foco de atención es la reincidencia detectada en ${factors.reincidencia} día${factors.reincidencia !== 1 ? "s" : ""} crítico${factors.reincidencia !== 1 ? "s" : ""}, lo que indica patrones de comportamiento que requieren intervención`
+    focoTexto = (
+      <Text>
+        El principal foco de atención es la <Text style={{ fontWeight: "bold" }}>reincidencia detectada en {factors.reincidencia} día{factors.reincidencia !== 1 ? "s" : ""} crítico{factors.reincidencia !== 1 ? "s" : ""}</Text>, lo que indica patrones de comportamiento que requieren intervención.
+      </Text>
     )
   } else if (factors.franjaDominante) {
     const horaInicio = factors.franjaDominante.split("-")[0]
     const horaFin = factors.franjaDominante.split("-")[1]
-    partes.push(
-      `El principal foco de atención es la concentración de eventos en la franja ${horaInicio}–${horaFin} h, donde se registró el ${((factors.franjaCount / distribution.total) * 100).toFixed(1)}% del total`
+    const porcentajeFranja = ((factors.franjaCount / distribution.total) * 100).toFixed(1)
+    focoTexto = (
+      <Text>
+        El principal foco de atención es la concentración de eventos en la <Text style={{ fontWeight: "bold" }}>franja {horaInicio}–{horaFin} h</Text>, donde se registró el <Text style={{ fontWeight: "bold" }}>{porcentajeFranja}%</Text> del total.
+      </Text>
     )
   } else if (distribution.pctFatiga >= 50) {
-    partes.push(
-      `El principal foco de atención es la alta incidencia de eventos de fatiga, sugiriendo la necesidad de revisar políticas de descanso y turnos`
+    focoTexto = (
+      <Text>
+        El principal foco de atención es la alta incidencia de eventos de fatiga, sugiriendo la necesidad de revisar políticas de descanso y turnos.
+      </Text>
     )
   } else {
-    partes.push(
-      `El principal foco de atención es mantener los controles preventivos y monitorear la evolución de los indicadores`
+    focoTexto = (
+      <Text>
+        El principal foco de atención es mantener los controles preventivos y monitorear la evolución de los indicadores.
+      </Text>
     )
   }
 
-  return partes.join(". ") + "."
+  return (
+    <View>
+      <Text style={{ fontSize: 12, lineHeight: 1.8, color: "#1f2937", marginBottom: 12 }}>
+        El estado general de seguridad vehicular presenta un nivel de riesgo <Text style={{ fontWeight: "bold" }}>{nivelRiesgo}</Text> con <Text style={{ fontWeight: "bold" }}>{distribution.total.toLocaleString()} evento{distribution.total !== 1 ? "s" : ""}</Text> registrado{distribution.total !== 1 ? "s" : ""}.
+      </Text>
+      <Text style={{ fontSize: 12, lineHeight: 1.8, color: "#1f2937", marginBottom: 12 }}>
+        {tendenciaTexto}
+      </Text>
+      <Text style={{ fontSize: 12, lineHeight: 1.8, color: "#1f2937" }}>
+        {focoTexto}
+      </Text>
+    </View>
+  )
 }
 
 // Función para generar resumen ejecutivo técnico (para modo technical, incluye alertas)
@@ -621,9 +721,12 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
   })
 
   // Generar resumen ejecutivo y recomendaciones estratégicas (solo para modo executive)
-  const resumenEjecutivoTexto = mode === "executive" 
+  const resumenEjecutivoComponente = mode === "executive" 
     ? generarResumenEjecutivo(distribution, factors, vehiculosUnicos, operadoresUnicos, allEventos)
-    : generarResumenEjecutivoTecnico(distribution, factors, vehiculosUnicos, operadoresUnicos, allEventos, securityAlert)
+    : null
+  const resumenEjecutivoTexto = mode !== "executive"
+    ? generarResumenEjecutivoTecnico(distribution, factors, vehiculosUnicos, operadoresUnicos, allEventos, securityAlert)
+    : ""
   const recomendacionesEstrategicas = mode === "executive"
     ? generarRecomendacionesEstrategicas(distribution, factors, top3Operadores, top3Vehiculos)
     : []
@@ -663,9 +766,9 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
         <Page size="A4" style={styles.page}>
           <View style={styles.sectionSpacer}>
             <Text style={styles.sectionTitle}>RESUMEN EJECUTIVO</Text>
-            <Text style={[styles.text, { fontSize: 12, lineHeight: 1.8, marginTop: 15 }]}>
-              {resumenEjecutivoTexto}
-            </Text>
+            <View style={{ marginTop: 15 }}>
+              {resumenEjecutivoComponente}
+            </View>
           </View>
 
           <View style={styles.sectionDivider} />
@@ -678,33 +781,33 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
                 <Text style={styles.kpiValue}>{distribution.total.toLocaleString()}</Text>
                 <Text style={styles.kpiSubtext}>D1 + D3</Text>
               </View>
-              <View style={styles.kpiCard}>
+              <View style={styles.kpiCardFatiga}>
                 <Text style={styles.kpiLabel}>% Fatiga (D1)</Text>
-                <Text style={styles.kpiValue}>{distribution.pctFatiga.toFixed(1)}%</Text>
+                <Text style={styles.kpiValueFatiga}>{distribution.pctFatiga.toFixed(1)}%</Text>
                 <Text style={styles.kpiSubtext}>{distribution.d1.toLocaleString()} eventos</Text>
               </View>
-              <View style={styles.kpiCard}>
+              <View style={styles.kpiCardDistraccion}>
                 <Text style={styles.kpiLabel}>% Distracción (D3)</Text>
-                <Text style={styles.kpiValue}>{distribution.pctDistraccion.toFixed(1)}%</Text>
+                <Text style={styles.kpiValueDistraccion}>{distribution.pctDistraccion.toFixed(1)}%</Text>
                 <Text style={styles.kpiSubtext}>{distribution.d3.toLocaleString()} eventos</Text>
               </View>
-              <View style={styles.kpiCard}>
+              <View style={styles.kpiCardEntidades}>
                 <Text style={styles.kpiLabel}>Vehículos Únicos</Text>
-                <Text style={styles.kpiValue}>{vehiculosUnicos.toLocaleString()}</Text>
+                <Text style={styles.kpiValueEntidades}>{vehiculosUnicos.toLocaleString()}</Text>
                 <Text style={styles.kpiSubtext}>Involucrados</Text>
                 {vehiculosLista.length > 0 && (
-                  <Text style={{ fontSize: 8, color: "#9ca3af", marginTop: 4, lineHeight: 1.3 }}>
+                  <Text style={{ fontSize: 8, color: "#64748b", marginTop: 4, lineHeight: 1.3 }}>
                     {vehiculosLista.join(" · ")}
                     {vehiculosRestantes > 0 && ` +${vehiculosRestantes} más`}
                   </Text>
                 )}
               </View>
-              <View style={styles.kpiCard}>
+              <View style={styles.kpiCardEntidades}>
                 <Text style={styles.kpiLabel}>Operadores Únicos</Text>
-                <Text style={styles.kpiValue}>{operadoresUnicos.toLocaleString()}</Text>
+                <Text style={styles.kpiValueEntidades}>{operadoresUnicos.toLocaleString()}</Text>
                 <Text style={styles.kpiSubtext}>Involucrados</Text>
                 {operadoresLista.length > 0 && (
-                  <Text style={{ fontSize: 8, color: "#9ca3af", marginTop: 4, lineHeight: 1.3 }}>
+                  <Text style={{ fontSize: 8, color: "#64748b", marginTop: 4, lineHeight: 1.3 }}>
                     {operadoresLista.map(formatearOperador).join(" · ")}
                     {operadoresRestantes > 0 && ` +${operadoresRestantes} más`}
                   </Text>

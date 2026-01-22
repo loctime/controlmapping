@@ -41,7 +41,7 @@ const styles = StyleSheet.create({
   headerSubtitle: {
     fontSize: 14,
     fontWeight: "bold",
-    color: "#374151",
+    color: "#1f2937",
     marginBottom: 6,
     textAlign: "center",
   },
@@ -81,20 +81,24 @@ const styles = StyleSheet.create({
   hechoTitle: {
     fontSize: 11,
     fontWeight: "bold",
-    color: "#1F2937",
-    marginBottom: 8,
+    color: "#1f2937",
+    marginBottom: 10,
   },
   hechoCard: {
-    backgroundColor: "#F9FAFB",
-    borderWidth: 1,
+    backgroundColor: "#ffffff",
+    borderWidth: 1.5,
     borderStyle: "solid",
-    borderColor: "#E5E7EB",
+    borderColor: "#d1d5db",
     borderRadius: 4,
-    padding: 10,
+    padding: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
   },
   hechoRow: {
     flexDirection: "row",
-    marginBottom: 6,
+    marginBottom: 8,
   },
   hechoRowLast: {
     flexDirection: "row",
@@ -102,13 +106,16 @@ const styles = StyleSheet.create({
   hechoLabel: {
     fontSize: 9,
     fontWeight: "bold",
-    color: "#374151",
+    color: "#4b5563",
     width: "40%",
+    textTransform: "uppercase",
+    letterSpacing: 0.3,
   },
   hechoValue: {
-    fontSize: 9,
-    color: "#6B7280",
+    fontSize: 10,
+    color: "#1f2937",
     flex: 1,
+    fontWeight: "600",
   },
   // Sección: Por qué es un riesgo
   riesgoSection: {
@@ -117,13 +124,13 @@ const styles = StyleSheet.create({
   riesgoTitle: {
     fontSize: 11,
     fontWeight: "bold",
-    color: "#1F2937",
-    marginBottom: 6,
+    color: "#1f2937",
+    marginBottom: 8,
   },
   riesgoText: {
-    fontSize: 9,
-    color: "#374151",
-    lineHeight: 1.5,
+    fontSize: 10,
+    color: "#1f2937",
+    lineHeight: 1.6,
     textAlign: "justify",
   },
   // Sección: Contexto mínimo
@@ -131,9 +138,9 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   contextoText: {
-    fontSize: 8,
-    color: "#6B7280",
-    lineHeight: 1.4,
+    fontSize: 9,
+    color: "#6b7280",
+    lineHeight: 1.5,
     fontStyle: "italic",
   },
   // Sección: Recomendación inmediata
@@ -143,26 +150,28 @@ const styles = StyleSheet.create({
   recomendacionTitle: {
     fontSize: 11,
     fontWeight: "bold",
-    color: "#1F2937",
-    marginBottom: 6,
+    color: "#1f2937",
+    marginBottom: 8,
   },
   recomendacionList: {
-    marginLeft: 8,
+    marginLeft: 4,
   },
   recomendacionItem: {
     flexDirection: "row",
-    marginBottom: 4,
+    marginBottom: 6,
+    paddingLeft: 4,
   },
   recomendacionBullet: {
-    fontSize: 9,
-    color: "#374151",
-    marginRight: 6,
-    width: 12,
+    fontSize: 10,
+    color: "#2563eb",
+    marginRight: 8,
+    width: 14,
+    fontWeight: "bold",
   },
   recomendacionText: {
-    fontSize: 9,
-    color: "#374151",
-    lineHeight: 1.4,
+    fontSize: 10,
+    color: "#1f2937",
+    lineHeight: 1.5,
     flex: 1,
   },
   // Cierre institucional
@@ -358,31 +367,55 @@ function seleccionarEventoMasCritico(eventos: VehiculoEvento[]): VehiculoEvento 
 }
 
 /**
- * Genera texto explicativo sobre por qué el evento es un riesgo
+ * Genera texto explicativo sobre por qué el evento es un riesgo (con formato React)
  */
-function generarTextoRiesgo(evento: VehiculoEvento): string {
+function generarTextoRiesgo(evento: VehiculoEvento): React.ReactElement {
   const eventoCode = evento.evento?.trim()
   const velocidad = evento.velocidad || 0
   
   if (eventoCode === "D1") {
     if (velocidad >= 80) {
-      return "Este tipo de evento está asociado a fatiga y disminución de reflejos, incrementando significativamente el riesgo de siniestros viales, especialmente cuando ocurre a alta velocidad en trayectos prolongados o nocturnos."
+      return (
+        <Text>
+          Este tipo de evento está asociado a <Text style={{ fontWeight: "bold" }}>fatiga y disminución de reflejos</Text>, incrementando significativamente el riesgo de siniestros viales, especialmente cuando ocurre a <Text style={{ fontWeight: "bold" }}>alta velocidad</Text> en trayectos prolongados o nocturnos.
+        </Text>
+      )
     }
-    return "Este tipo de evento está asociado a fatiga y disminución de reflejos, incrementando significativamente el riesgo de siniestros viales, especialmente en trayectos prolongados o nocturnos."
+    return (
+      <Text>
+        Este tipo de evento está asociado a <Text style={{ fontWeight: "bold" }}>fatiga y disminución de reflejos</Text>, incrementando significativamente el riesgo de siniestros viales, especialmente en trayectos prolongados o nocturnos.
+      </Text>
+    )
   }
   
   if (eventoCode === "D3") {
     if (velocidad >= 80) {
-      return "Este tipo de evento indica distracción del conductor, reduciendo su capacidad de reacción ante situaciones imprevistas, lo cual se agrava cuando ocurre a alta velocidad aumentando el riesgo de colisiones."
+      return (
+        <Text>
+          Este tipo de evento indica <Text style={{ fontWeight: "bold" }}>distracción del conductor</Text>, reduciendo su capacidad de reacción ante situaciones imprevistas, lo cual se agrava cuando ocurre a <Text style={{ fontWeight: "bold" }}>alta velocidad</Text> aumentando el riesgo de colisiones.
+        </Text>
+      )
     }
-    return "Este tipo de evento indica distracción del conductor, reduciendo su capacidad de reacción ante situaciones imprevistas y aumentando el riesgo de colisiones."
+    return (
+      <Text>
+        Este tipo de evento indica <Text style={{ fontWeight: "bold" }}>distracción del conductor</Text>, reduciendo su capacidad de reacción ante situaciones imprevistas y aumentando el riesgo de colisiones.
+      </Text>
+    )
   }
   
   if (velocidad >= 80) {
-    return "El exceso de velocidad reduce significativamente el tiempo de reacción del conductor y aumenta la severidad de posibles siniestros viales."
+    return (
+      <Text>
+        El <Text style={{ fontWeight: "bold" }}>exceso de velocidad</Text> reduce significativamente el tiempo de reacción del conductor y aumenta la severidad de posibles siniestros viales.
+      </Text>
+    )
   }
   
-  return "Este evento representa un riesgo para la seguridad vial y requiere atención preventiva."
+  return (
+    <Text>
+      Este evento representa un riesgo para la seguridad vial y requiere atención preventiva.
+    </Text>
+  )
 }
 
 /**
@@ -542,7 +575,11 @@ export const SecurityAlertPdf: React.FC<SecurityAlertPdfProps> = ({
         {/* 3) POR QUÉ ES UN RIESGO */}
         <View style={styles.riesgoSection}>
           <Text style={styles.riesgoTitle}>Por qué es un riesgo</Text>
-          <Text style={styles.riesgoText}>{textoRiesgo}</Text>
+          <View style={{ backgroundColor: "#fef2f2", borderLeftWidth: 3, borderLeftColor: "#dc2626", padding: 10, borderRadius: 2 }}>
+            <View style={styles.riesgoText}>
+              {textoRiesgo}
+            </View>
+          </View>
         </View>
 
         {/* 4) CONTEXTO MÍNIMO (opcional) */}
@@ -555,13 +592,15 @@ export const SecurityAlertPdf: React.FC<SecurityAlertPdfProps> = ({
         {/* 5) RECOMENDACIÓN INMEDIATA */}
         <View style={styles.recomendacionSection}>
           <Text style={styles.recomendacionTitle}>Recomendación inmediata</Text>
-          <View style={styles.recomendacionList}>
-            {recomendaciones.map((rec, index) => (
-              <View key={index} style={styles.recomendacionItem}>
-                <Text style={styles.recomendacionBullet}>•</Text>
-                <Text style={styles.recomendacionText}>{rec}</Text>
-              </View>
-            ))}
+          <View style={{ backgroundColor: "#eff6ff", borderLeftWidth: 3, borderLeftColor: "#2563eb", padding: 10, borderRadius: 2 }}>
+            <View style={styles.recomendacionList}>
+              {recomendaciones.map((rec, index) => (
+                <View key={index} style={styles.recomendacionItem}>
+                  <Text style={styles.recomendacionBullet}>•</Text>
+                  <Text style={styles.recomendacionText}>{rec}</Text>
+                </View>
+              ))}
+            </View>
           </View>
         </View>
 

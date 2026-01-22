@@ -1,0 +1,51 @@
+{
+  "root": true,
+  "extends": ["next/core-web-vitals"],
+  "rules": {
+    "no-restricted-syntax": [
+      "error",
+      {
+        "selector": "NewExpression[callee.name='Date']",
+        "message": "⚠️ CONTRATO CONGELADO: No usar 'new Date(...)' directamente. Usar wrappers de dominio: normalizeDomainDate() o normalizeAuditDate(). Solo permitido en domains/date/**/*.ts y src/lib/excel/date-parser.ts"
+      }
+    ],
+    "no-restricted-imports": [
+      "error",
+      {
+        "paths": [
+          {
+            "name": "@/src/lib/excel/date-parser",
+            "importNames": ["parseExcelDate"],
+            "message": "⚠️ CONTRATO CONGELADO: No importar parseExcelDate directamente. Usar desde @/lib/normalization o wrappers de dominio. Solo permitido en domains/date/**/*.ts y src/lib/normalization/index.ts"
+          },
+          {
+            "name": "@/lib/excel/date-parser",
+            "importNames": ["parseExcelDate"],
+            "message": "⚠️ CONTRATO CONGELADO: No importar parseExcelDate directamente. Usar desde @/lib/normalization o wrappers de dominio. Solo permitido en domains/date/**/*.ts y src/lib/normalization/index.ts"
+          }
+        ],
+        "patterns": [
+          {
+            "group": ["**/excel/date-parser"],
+            "importNames": ["parseExcelDate"],
+            "message": "⚠️ CONTRATO CONGELADO: No importar parseExcelDate directamente. Usar desde @/lib/normalization o wrappers de dominio. Solo permitido en domains/date/**/*.ts y src/lib/normalization/index.ts"
+          }
+        ]
+      }
+    ]
+  },
+  "overrides": [
+    {
+      "files": ["domains/date/**/*.ts", "src/lib/excel/date-parser.ts"],
+      "rules": {
+        "no-restricted-syntax": "off"
+      }
+    },
+    {
+      "files": ["domains/date/**/*.ts", "src/lib/normalization/index.ts"],
+      "rules": {
+        "no-restricted-imports": "off"
+      }
+    }
+  ]
+}

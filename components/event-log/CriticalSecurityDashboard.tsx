@@ -44,11 +44,13 @@ function formatFecha(fecha: Date): string {
 
 /**
  * Verifica si hay alerta crítica: operador con >= 3 eventos D1 el mismo día
+ * Devuelve el rango de fechas de todos los eventos D1 y D3 del operador crítico
  */
 function checkCriticalAlert(eventos: VehiculoEvento[]): {
   operador: string
-  fecha: Date
-  count: number
+  fechaInicio: Date
+  fechaFin: Date
+  totalEventos: number
 } | null {
   const eventsByOperatorAndDate = new Map<string, VehiculoEvento[]>()
 
@@ -74,19 +76,42 @@ function checkCriticalAlert(eventos: VehiculoEvento[]): {
   })
 
   // Buscar operadores con >= 3 eventos D1 el mismo día
+  let operadorCritico: string | null = null
+  
   for (const [key, eventos] of eventsByOperatorAndDate.entries()) {
     if (eventos.length >= 3) {
-      const [operador, fechaKey] = key.split("|")
-      const fecha = new Date(fechaKey + "T00:00:00")
-      return {
-        operador,
-        fecha,
-        count: eventos.length,
-      }
+      const [operador] = key.split("|")
+      operadorCritico = operador
+      break
     }
   }
 
-  return null
+  if (!operadorCritico) {
+    return null
+  }
+
+  // Filtrar todos los eventos D1 y D3 del operador crítico
+  const eventosCriticosOperador = eventos.filter((evento) => {
+    const eventoCode = evento.evento?.trim()
+    return evento.operador?.trim() === operadorCritico && 
+           (eventoCode === "D1" || eventoCode === "D3")
+  })
+
+  if (eventosCriticosOperador.length === 0) {
+    return null
+  }
+
+  // Calcular fecha de inicio y fin
+  const fechas = eventosCriticosOperador.map(e => new Date(e.fecha))
+  const fechaInicio = new Date(Math.min(...fechas.map(f => f.getTime())))
+  const fechaFin = new Date(Math.max(...fechas.map(f => f.getTime())))
+
+  return {
+    operador: operadorCritico,
+    fechaInicio,
+    fechaFin,
+    totalEventos: eventosCriticosOperador.length,
+  }
 }
 
 /**
@@ -452,8 +477,12 @@ export function CriticalSecurityDashboard({
                       ALERTA CRÍTICA DE SEGURIDAD
                     </h2>
                     <p className="text-base text-red-900 leading-relaxed">
-                      Conductor <span className="font-semibold">{criticalAlert.operador}</span> registró múltiples eventos de fatiga el{" "}
-                      <span className="font-semibold">{formatFecha(criticalAlert.fecha)}</span>. Riesgo alto de accidente.
+                      Conductor <span className="font-semibold">{criticalAlert.operador}</span> registró múltiples eventos de fatiga{" "}
+                      {criticalAlert.fechaInicio.getTime() === criticalAlert.fechaFin.getTime() 
+                        ? <>el <span className="font-semibold">{formatFecha(criticalAlert.fechaInicio)}</span></>
+                        : <>entre el <span className="font-semibold">{formatFecha(criticalAlert.fechaInicio)}</span> y el{" "}
+                          <span className="font-semibold">{formatFecha(criticalAlert.fechaFin)}</span></>
+                      }. Riesgo alto de accidente.
                     </p>
                   </div>
                   <Badge className="bg-red-600 hover:bg-red-700 text-white px-5 py-2.5 text-xs font-bold uppercase tracking-wider rounded-full shadow-lg flex-shrink-0">

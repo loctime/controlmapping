@@ -18,6 +18,7 @@ export type DateParseResult = {
     | "numeric-slash"
     | "iso"
     | "text-month-es"
+    | "dd/mm/yyyy hh:mm"
     | "ambiguous"
     | "unknown"
   original: unknown
@@ -114,6 +115,41 @@ function formatDate(day: number, month: number, year?: number): string {
   }
   
   return `${dayStr}/${monthStr}`
+}
+
+/**
+ * Parsea formato DD/MM/YYYY con hora (HH:mm o HH:mm:ss)
+ * Extrae solo la parte de fecha, ignorando la hora
+ */
+function parseDateWithTime(input: string): { day: number; month: number; year: number } | null {
+  // Patrón: DD/MM/YYYY HH:mm o DD/MM/YYYY HH:mm:ss
+  // Permitir espacios flexibles alrededor de la hora
+  const match = input.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?/)
+  if (!match) {
+    return null
+  }
+
+  const day = parseInt(match[1], 10)
+  const month = parseInt(match[2], 10)
+  const yearPart = match[3]
+
+  if (isNaN(day) || isNaN(month)) {
+    return null
+  }
+
+  let year: number
+  const yearNum = parseInt(yearPart, 10)
+  if (isNaN(yearNum)) {
+    return null
+  }
+  // Si el año es de 2 dígitos, asumir 20XX
+  if (yearPart.length === 2) {
+    year = 2000 + yearNum
+  } else {
+    year = yearNum
+  }
+
+  return { day, month, year }
 }
 
 /**
@@ -275,6 +311,19 @@ export function parseExcelDate(input: unknown): DateParseResult {
       isDate: true,
       confidence: "high",
       sourceFormat: "iso",
+      original: input,
+    }
+  }
+
+  // ALTA CONFIANZA: Formato DD/MM/YYYY con hora (HH:mm o HH:mm:ss)
+  // Extraer solo la parte de fecha, ignorando la hora
+  const dateWithTimeParts = parseDateWithTime(str)
+  if (dateWithTimeParts && isValidDate(dateWithTimeParts.day, dateWithTimeParts.month, dateWithTimeParts.year)) {
+    return {
+      value: formatDate(dateWithTimeParts.day, dateWithTimeParts.month, dateWithTimeParts.year),
+      isDate: true,
+      confidence: "high",
+      sourceFormat: "dd/mm/yyyy hh:mm",
       original: input,
     }
   }

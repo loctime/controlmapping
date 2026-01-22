@@ -283,13 +283,19 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   recommendationBox: {
-    padding: 15,
-    backgroundColor: "#f0f9ff",
-    borderWidth: 1,
+    padding: 16,
+    backgroundColor: "#ffffff",
+    borderWidth: 1.5,
     borderStyle: "solid",
-    borderColor: "#0ea5e9",
+    borderColor: "#3b82f6",
+    borderLeftWidth: 4,
+    borderLeftColor: "#2563eb",
     borderRadius: 4,
-    marginBottom: 10,
+    marginBottom: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
   },
   sectionDivider: {
     height: 1,
@@ -977,26 +983,51 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
           <View style={styles.sectionSpacer}>
             <Text style={styles.sectionTitle}>INTERPRETACIÓN Y RECOMENDACIONES</Text>
             
-            <Text style={[styles.subsectionTitle, { marginTop: 15 }]}>Interpretación Técnica</Text>
-            <Text style={[styles.text, { fontSize: 11, lineHeight: 1.7, marginBottom: 20 }]}>
-              {distribution.total === 0 
-                ? "El análisis del período no muestra eventos de seguridad vial registrados, indicando un estado operativo estable."
-                : `El escenario observado muestra ${distribution.total} evento${distribution.total !== 1 ? "s" : ""} de seguridad vial, con una distribución ${distribution.pctFatiga >= 50 ? "predominante de fatiga" : distribution.pctDistraccion >= 50 ? "predominante de distracción" : "equilibrada"} entre ambos tipos de eventos. ${factors.reincidencia > 0 ? `Se detectaron ${factors.reincidencia} día${factors.reincidencia !== 1 ? "s" : ""} con reincidencia, lo que sugiere patrones de comportamiento que requieren atención.` : ""} ${factors.franjaDominante ? `La concentración temporal en la franja ${factors.franjaDominante}h indica posibles factores operativos o ambientales específicos de ese horario.` : ""}`}
-            </Text>
+            <Text style={[styles.subsectionTitle, { marginTop: 15, marginBottom: 12 }]}>Interpretación Técnica</Text>
+            {distribution.total === 0 ? (
+              <View>
+                <Text style={{ fontSize: 12, lineHeight: 1.8, color: "#1f2937", marginBottom: 12 }}>
+                  El análisis del período no muestra eventos de seguridad vial registrados, indicando un estado operativo estable.
+                </Text>
+              </View>
+            ) : (
+              <View>
+                <Text style={{ fontSize: 12, lineHeight: 1.8, color: "#1f2937", marginBottom: 12 }}>
+                  El escenario observado muestra <Text style={{ fontWeight: "bold" }}>{distribution.total} evento{distribution.total !== 1 ? "s" : ""}</Text> de seguridad vial, con una distribución <Text style={{ fontWeight: "bold" }}>{distribution.pctFatiga >= 50 ? "predominante de fatiga" : distribution.pctDistraccion >= 50 ? "predominante de distracción" : "equilibrada"}</Text> entre ambos tipos de eventos.
+                </Text>
+                {factors.reincidencia > 0 && (
+                  <Text style={{ fontSize: 12, lineHeight: 1.8, color: "#1f2937", marginBottom: 12 }}>
+                    Se detectaron <Text style={{ fontWeight: "bold" }}>{factors.reincidencia} día{factors.reincidencia !== 1 ? "s" : ""} con reincidencia</Text>, lo que sugiere patrones de comportamiento que requieren atención.
+                  </Text>
+                )}
+                {factors.franjaDominante && (
+                  <Text style={{ fontSize: 12, lineHeight: 1.8, color: "#1f2937" }}>
+                    La concentración temporal en la <Text style={{ fontWeight: "bold" }}>franja {factors.franjaDominante}h</Text> indica posibles factores operativos o ambientales específicos de ese horario.
+                  </Text>
+                )}
+              </View>
+            )}
 
-            <Text style={[styles.subsectionTitle, { marginTop: 20 }]}>Recomendaciones Estratégicas</Text>
+            <Text style={[styles.subsectionTitle, { marginTop: 25, marginBottom: 12 }]}>Recomendaciones Estratégicas</Text>
             {recomendacionesEstrategicas.length > 0 ? (
               recomendacionesEstrategicas.map((rec, idx) => (
-                <View key={idx} style={[styles.recommendationBox, { marginBottom: 12 }]}>
-                  <Text style={{ fontSize: 11, lineHeight: 1.6 }}>
-                    {idx + 1}. {rec}
-                  </Text>
+                <View key={idx} style={styles.recommendationBox}>
+                  <View style={{ flexDirection: "row", marginBottom: 4 }}>
+                    <Text style={{ fontSize: 12, fontWeight: "bold", color: "#2563eb", marginRight: 8 }}>
+                      {idx + 1}.
+                    </Text>
+                    <Text style={{ fontSize: 12, lineHeight: 1.7, color: "#1f2937", flex: 1 }}>
+                      {rec}
+                    </Text>
+                  </View>
                 </View>
               ))
             ) : (
-              <Text style={[styles.text, { fontSize: 11, color: "#6b7280", fontStyle: "italic" }]}>
-                No se requieren recomendaciones específicas en este momento. Se recomienda mantener los controles preventivos actuales.
-              </Text>
+              <View style={[styles.recommendationBox, { backgroundColor: "#f9fafb", borderColor: "#d1d5db", borderLeftColor: "#9ca3af" }]}>
+                <Text style={{ fontSize: 12, lineHeight: 1.7, color: "#6b7280", fontStyle: "italic" }}>
+                  No se requieren recomendaciones específicas en este momento. Se recomienda mantener los controles preventivos actuales.
+                </Text>
+              </View>
             )}
           </View>
           <PdfFooter />

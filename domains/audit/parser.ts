@@ -1,7 +1,7 @@
 import * as XLSX from "xlsx"
 import type { ExcelData, SchemaTemplate, SchemaInstance, DataType } from "@/types/excel"
 import type { AuditItem, AuditTotals, AuditFile } from "./types"
-import { parseExcelDate } from "@/src/lib/excel/date-parser"
+import { normalizeAuditDate } from "./normalizeAuditDate"
 
 // ============================================================================
 // HELPERS INTERNOS
@@ -122,29 +122,11 @@ function convertValue(value: string | number | null, dataType?: DataType): strin
 }
 
 /**
- * Convierte un valor a Date usando parseExcelDate
+ * Convierte un valor a Date usando el wrapper de dominio de auditoría
  * Retorna Date | null para mantener compatibilidad con el código existente
  */
 function convertToDate(value: string | number): Date | null {
-  const parsed = parseExcelDate(value)
-  
-  // Solo convertir si hay alta o media confianza
-  if (parsed.isDate && parsed.confidence !== "low" && parsed.value) {
-    // Parsear el valor normalizado DD/MM o DD/MM/YYYY
-    const parts = parsed.value.split("/")
-    if (parts.length >= 2) {
-      const day = parseInt(parts[0], 10)
-      const month = parseInt(parts[1], 10) - 1 // Mes en JS es 0-indexed
-      const year = parts.length === 3 ? parseInt(parts[2], 10) : new Date().getFullYear()
-      
-      if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
-        const date = new Date(year, month, day)
-        return isNaN(date.getTime()) ? null : date
-      }
-    }
-  }
-  
-  return null
+  return normalizeAuditDate(value)
 }
 
 /**

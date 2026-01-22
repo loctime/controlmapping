@@ -140,19 +140,6 @@ function extraerPatentesPorTipo(eventos: VehiculoEvento[], tipoEvento: "D1" | "D
 }
 
 /**
- * Resume patentes en formato legible:
- * - 1 patente: muestra la patente
- * - 2 patentes: muestra ambas
- * - Más de 2: muestra "<PATENTE> +N"
- */
-function resumirPatentes(patentes: string[]): string {
-  if (patentes.length === 0) return ""
-  if (patentes.length === 1) return patentes[0]
-  if (patentes.length === 2) return patentes.join(", ")
-  return `${patentes[0]} +${patentes.length - 1}`
-}
-
-/**
  * Obtiene la patente principal (la que aparece más veces)
  */
 function obtenerPatentePrincipal(eventos: VehiculoEvento[]): string {
@@ -232,15 +219,13 @@ export function CriticalSecurityDashboard({ eventos }: CriticalSecurityDashboard
     }
   }, [eventos])
 
-  // Patentes por tipo de evento para KPI cards
+  // Patentes por tipo de evento para KPI cards (como arrays)
   const patentesPorTipo = useMemo(() => {
     return {
-      criticos: resumirPatentes(extraerPatentesPorTipo(eventos, "criticos")),
-      fatiga: resumirPatentes(extraerPatentesPorTipo(eventos, "D1")),
-      distraccion: resumirPatentes(extraerPatentesPorTipo(eventos, "D3")),
-      vehiculosUnicos: resumirPatentes(
-        Array.from(new Set(eventos.map((e) => e.vehiculo?.trim()).filter((v) => v && v !== "")))
-      ),
+      criticos: extraerPatentesPorTipo(eventos, "criticos"),
+      fatiga: extraerPatentesPorTipo(eventos, "D1"),
+      distraccion: extraerPatentesPorTipo(eventos, "D3"),
+      vehiculosUnicos: Array.from(new Set(eventos.map((e) => e.vehiculo?.trim()).filter((v) => v && v !== ""))),
     }
   }, [eventos])
 
@@ -455,8 +440,8 @@ export function CriticalSecurityDashboard({ eventos }: CriticalSecurityDashboard
             iconColor="critical"
             value={kpis.eventosCriticos}
             title="Eventos críticos"
-            subtitle={patentesPorTipo.criticos || "Fatiga y distracción"}
-            highlight={patentesPorTipo.criticos ? { label: patentesPorTipo.criticos, tone: "critical" } : undefined}
+            subtitle={patentesPorTipo.criticos.length === 0 ? "Fatiga y distracción" : undefined}
+            patentes={patentesPorTipo.criticos.length > 0 ? patentesPorTipo.criticos : undefined}
           />
 
           {/* Eventos de fatiga */}
@@ -465,8 +450,8 @@ export function CriticalSecurityDashboard({ eventos }: CriticalSecurityDashboard
             iconColor="warning"
             value={kpis.eventosFatiga}
             title="Eventos de fatiga"
-            subtitle={patentesPorTipo.fatiga || "Parpadeo pesado"}
-            highlight={patentesPorTipo.fatiga ? { label: patentesPorTipo.fatiga, tone: "warning" } : undefined}
+            subtitle={patentesPorTipo.fatiga.length === 0 ? "Parpadeo pesado" : undefined}
+            patentes={patentesPorTipo.fatiga.length > 0 ? patentesPorTipo.fatiga : undefined}
           />
 
           {/* Eventos de distracción */}
@@ -475,8 +460,8 @@ export function CriticalSecurityDashboard({ eventos }: CriticalSecurityDashboard
             iconColor="yellow"
             value={kpis.eventosDistraccion}
             title="Eventos de distracción"
-            subtitle={patentesPorTipo.distraccion || "Sin mirar al frente"}
-            highlight={patentesPorTipo.distraccion ? { label: patentesPorTipo.distraccion, tone: "yellow" } : undefined}
+            subtitle={patentesPorTipo.distraccion.length === 0 ? "Sin mirar al frente" : undefined}
+            patentes={patentesPorTipo.distraccion.length > 0 ? patentesPorTipo.distraccion : undefined}
           />
         </div>
 
@@ -488,7 +473,7 @@ export function CriticalSecurityDashboard({ eventos }: CriticalSecurityDashboard
             iconColor="gray"
             value={kpis.vehiculosUnicos}
             title="Vehículos únicos"
-            subtitle={patentesPorTipo.vehiculosUnicos}
+            patentes={patentesPorTipo.vehiculosUnicos.length > 0 ? patentesPorTipo.vehiculosUnicos : undefined}
           />
 
           {/* Operadores únicos */}

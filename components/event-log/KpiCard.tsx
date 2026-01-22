@@ -14,6 +14,7 @@ interface KpiCardProps {
   subtitle?: string
   className?: string
   highlight?: { label: string; tone?: "critical" | "warning" | "yellow" | "neutral" }
+  patentes?: string[]
 }
 
 // Mapeo de colores semánticos para el icono decorativo con alpha translúcido
@@ -34,6 +35,32 @@ const highlightColors = {
   neutral: "bg-gray-600 hover:bg-gray-700 text-white border-gray-700",
 }
 
+/**
+ * Formatea una patente para mostrar en la UI.
+ * - Convierte a uppercase
+ * - Si matchea ^([A-Z]{2})(\d{3})([A-Z]{2})$ → muestra AA 123 BB
+ * - Si matchea ^([A-Z]{3})(\d{3})$ → muestra AAA 123
+ * - En cualquier otro caso, devuelve la patente original en uppercase
+ */
+function formatPatentForDisplay(patente: string): string {
+  const upper = patente.toUpperCase().trim()
+  
+  // Formato AA123BB → AA 123 BB
+  const matchOldFormat = upper.match(/^([A-Z]{2})(\d{3})([A-Z]{2})$/)
+  if (matchOldFormat) {
+    return `${matchOldFormat[1]} ${matchOldFormat[2]} ${matchOldFormat[3]}`
+  }
+  
+  // Formato AAA123 → AAA 123
+  const matchNewFormat = upper.match(/^([A-Z]{3})(\d{3})$/)
+  if (matchNewFormat) {
+    return `${matchNewFormat[1]} ${matchNewFormat[2]}`
+  }
+  
+  // Cualquier otro caso, devolver en uppercase sin modificar
+  return upper
+}
+
 export function KpiCard({
   icon: Icon,
   iconColor = "gray",
@@ -42,6 +69,7 @@ export function KpiCard({
   subtitle,
   className,
   highlight,
+  patentes,
 }: KpiCardProps) {
   const decorativeColor = decorativeIconColors[iconColor]
   const highlightTone = highlight?.tone || "neutral"
@@ -58,12 +86,27 @@ export function KpiCard({
         className
       )}
     >
-      {/* Badge highlight en esquina superior derecha */}
-      {highlight && (
+      {/* Badge highlight en esquina superior derecha (solo si no hay patentes) */}
+      {highlight && !patentes && (
         <div className="absolute top-4 right-4 z-20">
           <Badge className={cn("font-semibold text-xs px-2.5 py-1 border shadow-sm", highlightClassName)}>
             {highlight.label}
           </Badge>
+        </div>
+      )}
+
+      {/* Chips de patentes en esquina superior derecha */}
+      {patentes && patentes.length > 0 && (
+        <div className="absolute top-4 right-4 z-20 flex flex-wrap gap-1.5 max-w-[60%] justify-end">
+          {patentes.map((patente) => (
+            <Badge
+              key={patente}
+              variant="outline"
+              className="text-xs px-2 py-0.5 font-medium bg-white border-gray-300 text-gray-700 hover:bg-gray-50"
+            >
+              {formatPatentForDisplay(patente)}
+            </Badge>
+          ))}
         </div>
       )}
 

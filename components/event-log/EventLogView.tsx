@@ -28,9 +28,11 @@ import { CriticalSecurityDashboard } from "./CriticalSecurityDashboard"
 
 interface EventLogViewProps {
   data: VehiculoEventosFile[]
+  defaultTab?: "completo" | "dashboard"
+  hideTabs?: boolean
 }
 
-export function EventLogView({ data }: EventLogViewProps) {
+export function EventLogView({ data, defaultTab = "completo", hideTabs = false }: EventLogViewProps) {
   // Combinar todos los eventos de todos los archivos
   const allEventos = useMemo(() => {
     return data.flatMap((file) => file.eventos)
@@ -214,30 +216,12 @@ export function EventLogView({ data }: EventLogViewProps) {
     }
   }
 
-  return (
+  // Contenido del tab "Dashboard Visual"
+  const dashboardContent = <CriticalSecurityDashboard eventos={allEventos} />
+
+  // Contenido del tab "Vista Completa"
+  const completoContent = (
     <div className="space-y-6">
-      {/* Título del reporte */}
-      <div>
-        <h2 className="text-2xl font-bold">Reporte de Eventos Vehiculares</h2>
-        <p className="text-sm text-muted-foreground mt-1">
-          Análisis de telemetría y seguridad
-        </p>
-      </div>
-
-      {/* Tabs para alternar entre vistas */}
-      <Tabs defaultValue="completo" className="w-full">
-        <TabsList className="grid w-full max-w-md grid-cols-2">
-          <TabsTrigger value="completo">Vista Completa</TabsTrigger>
-          <TabsTrigger value="dashboard">Dashboard Visual</TabsTrigger>
-        </TabsList>
-
-        {/* Tab: Dashboard Visual */}
-        <TabsContent value="dashboard" className="mt-6">
-          <CriticalSecurityDashboard eventos={allEventos} />
-        </TabsContent>
-
-        {/* Tab: Vista Completa */}
-        <TabsContent value="completo" className="mt-6 space-y-6">
 
       {/* KPIs básicos */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -507,6 +491,44 @@ export function EventLogView({ data }: EventLogViewProps) {
           </TooltipContent>
         </Tooltip>
       </div>
+    </div>
+  )
+
+  // Si se ocultan los tabs, mostrar directamente el contenido correspondiente
+  if (hideTabs) {
+    return (
+      <div className="space-y-6">
+        {defaultTab === "dashboard" ? dashboardContent : completoContent}
+      </div>
+    )
+  }
+
+  // Mostrar con tabs internos (comportamiento por defecto)
+  return (
+    <div className="space-y-6">
+      {/* Título del reporte */}
+      <div>
+        <h2 className="text-2xl font-bold">Reporte de Eventos Vehiculares</h2>
+        <p className="text-sm text-muted-foreground mt-1">
+          Análisis de telemetría y seguridad
+        </p>
+      </div>
+
+      {/* Tabs para alternar entre vistas */}
+      <Tabs defaultValue={defaultTab} value={defaultTab} className="w-full">
+        <TabsList className="grid w-full max-w-md grid-cols-2">
+          <TabsTrigger value="completo">Vista Completa</TabsTrigger>
+          <TabsTrigger value="dashboard">Dashboard Visual</TabsTrigger>
+        </TabsList>
+
+        {/* Tab: Dashboard Visual */}
+        <TabsContent value="dashboard" className="mt-6">
+          {dashboardContent}
+        </TabsContent>
+
+        {/* Tab: Vista Completa */}
+        <TabsContent value="completo" className="mt-6">
+          {completoContent}
         </TabsContent>
       </Tabs>
     </div>

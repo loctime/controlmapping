@@ -2,7 +2,7 @@ import React from "react"
 import { Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer"
 import type { VehiculoEvento } from "@/domains/vehiculo/types"
 import type { SecurityAlert } from "./securityAlerts"
-import { dominantTimeBand, countD1D3, computeFactors } from "./riskModel"
+import { countD1D3 } from "./riskModel"
 
 interface SecurityAlertPdfProps {
   allEventos: VehiculoEvento[]
@@ -16,185 +16,170 @@ interface SecurityAlertPdfProps {
   }
 }
 
-// Estilos del PDF - Diseño preventivo y visual (optimizado para una sola hoja)
+type NivelRiesgo = "ALTO" | "MEDIO" | "BAJO"
+
+// Estilos del PDF - Diseño preventivo compacto (SIEMPRE 1 página)
 const styles = StyleSheet.create({
   page: {
-    padding: 25,
-    paddingBottom: 50, // Espacio para footer
+    padding: 20,
+    paddingBottom: 40,
     fontSize: 10,
     fontFamily: "Helvetica",
     backgroundColor: "#FFFFFF",
   },
-  // Header rojo
+  // Encabezado
   header: {
-    backgroundColor: "#DC2626",
-    padding: 15,
-    marginBottom: 15,
-    borderRadius: 4,
+    marginBottom: 12,
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: "bold",
-    color: "#FFFFFF",
-    marginBottom: 6,
+    color: "#1F2937",
+    marginBottom: 4,
     textAlign: "center",
   },
   headerSubtitle: {
-    fontSize: 12,
-    color: "#FFFFFF",
-    textAlign: "center",
+    fontSize: 14,
+    fontWeight: "bold",
+    color: "#374151",
     marginBottom: 6,
+    textAlign: "center",
+  },
+  headerBadgeContainer: {
+    flexDirection: "row",
+    justifyContent: "center",
+    marginBottom: 6,
+  },
+  headerBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 4,
+    fontSize: 11,
+    fontWeight: "bold",
+  },
+  badgeAlto: {
+    backgroundColor: "#FEE2E2",
+    color: "#991B1B",
+  },
+  badgeMedio: {
+    backgroundColor: "#FED7AA",
+    color: "#9A3412",
+  },
+  badgeBajo: {
+    backgroundColor: "#FEF3C7",
+    color: "#78350F",
   },
   headerDate: {
     fontSize: 9,
-    color: "#FEE2E2",
+    color: "#6B7280",
     textAlign: "center",
   },
-  // Bloque principal de alerta
-  alertBlock: {
-    backgroundColor: "#FEF2F2",
-    borderWidth: 2,
-    borderStyle: "solid",
-    borderColor: "#DC2626",
-    padding: 14,
-    marginBottom: 15,
-    borderRadius: 4,
+  // Sección: Hecho concreto
+  hechoSection: {
+    marginBottom: 12,
   },
-  alertText: {
-    fontSize: 12,
-    fontWeight: "bold",
-    color: "#991B1B",
-    marginBottom: 10,
-    lineHeight: 1.5,
-    textAlign: "center",
-  },
-  alertDetails: {
-    fontSize: 10,
-    color: "#7F1D1D",
-    marginBottom: 5,
-    lineHeight: 1.4,
-    textAlign: "center",
-  },
-  // Cards de KPIs
-  kpiSection: {
-    marginBottom: 15,
-  },
-  kpiTitle: {
-    fontSize: 13,
+  hechoTitle: {
+    fontSize: 11,
     fontWeight: "bold",
     color: "#1F2937",
-    marginBottom: 10,
-    textAlign: "center",
+    marginBottom: 8,
   },
-  kpiGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-    gap: 8,
-  },
-  kpiCard: {
-    width: "48%",
+  hechoCard: {
     backgroundColor: "#F9FAFB",
     borderWidth: 1,
     borderStyle: "solid",
     borderColor: "#E5E7EB",
     borderRadius: 4,
     padding: 10,
-    marginBottom: 8,
   },
-  kpiValue: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#1F2937",
-    marginBottom: 3,
-  },
-  kpiLabel: {
-    fontSize: 8,
-    color: "#6B7280",
-    lineHeight: 1.2,
-    fontWeight: "bold",
-  },
-  // Contexto preventivo
-  contextBlock: {
-    backgroundColor: "#FFFBEB",
-    borderLeftWidth: 4,
-    borderLeftStyle: "solid",
-    borderLeftColor: "#F59E0B",
-    padding: 12,
-    marginBottom: 15,
-    borderRadius: 2,
-  },
-  contextText: {
-    fontSize: 9,
-    color: "#78350F",
-    lineHeight: 1.5,
-  },
-  // Detalle del evento crítico
-  detailSection: {
-    marginBottom: 15,
-  },
-  detailTitle: {
-    fontSize: 13,
-    fontWeight: "bold",
-    color: "#1F2937",
-    marginBottom: 10,
-  },
-  detailTable: {
-    borderWidth: 1,
-    borderStyle: "solid",
-    borderColor: "#E5E7EB",
-    borderRadius: 4,
-  },
-  detailRow: {
+  hechoRow: {
     flexDirection: "row",
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
-    borderBottomStyle: "solid",
-    paddingVertical: 8,
-    paddingHorizontal: 10,
+    marginBottom: 6,
   },
-  detailRowLast: {
+  hechoRowLast: {
     flexDirection: "row",
-    paddingVertical: 8,
-    paddingHorizontal: 10,
   },
-  detailLabel: {
+  hechoLabel: {
     fontSize: 9,
     fontWeight: "bold",
     color: "#374151",
-    width: "35%",
+    width: "40%",
   },
-  detailValue: {
+  hechoValue: {
     fontSize: 9,
     color: "#6B7280",
     flex: 1,
   },
-  // Footer
-  footer: {
-    position: "absolute",
-    bottom: 15,
-    left: 25,
-    right: 25,
+  // Sección: Por qué es un riesgo
+  riesgoSection: {
+    marginBottom: 12,
+  },
+  riesgoTitle: {
+    fontSize: 11,
+    fontWeight: "bold",
+    color: "#1F2937",
+    marginBottom: 6,
+  },
+  riesgoText: {
+    fontSize: 9,
+    color: "#374151",
+    lineHeight: 1.5,
+    textAlign: "justify",
+  },
+  // Sección: Contexto mínimo
+  contextoSection: {
+    marginBottom: 12,
+  },
+  contextoText: {
+    fontSize: 8,
+    color: "#6B7280",
+    lineHeight: 1.4,
+    fontStyle: "italic",
+  },
+  // Sección: Recomendación inmediata
+  recomendacionSection: {
+    marginBottom: 12,
+  },
+  recomendacionTitle: {
+    fontSize: 11,
+    fontWeight: "bold",
+    color: "#1F2937",
+    marginBottom: 6,
+  },
+  recomendacionList: {
+    marginLeft: 8,
+  },
+  recomendacionItem: {
+    flexDirection: "row",
+    marginBottom: 4,
+  },
+  recomendacionBullet: {
+    fontSize: 9,
+    color: "#374151",
+    marginRight: 6,
+    width: 12,
+  },
+  recomendacionText: {
+    fontSize: 9,
+    color: "#374151",
+    lineHeight: 1.4,
+    flex: 1,
+  },
+  // Cierre institucional
+  cierreSection: {
+    marginTop: 8,
     paddingTop: 8,
     borderTopWidth: 1,
     borderTopColor: "#E5E7EB",
     borderTopStyle: "solid",
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
   },
-  footerText: {
+  cierreText: {
     fontSize: 7,
     color: "#9CA3AF",
-    flex: 1,
-  },
-  footerPage: {
-    fontSize: 7,
-    color: "#9CA3AF",
+    textAlign: "center",
+    lineHeight: 1.4,
   },
 })
-
-// Usar función del modelo de riesgo para calcular franja horaria
 
 /**
  * Formatea una fecha a formato legible (DD/MM/YYYY)
@@ -219,63 +204,6 @@ function formatFechaHora(fecha: Date): string {
 }
 
 /**
- * Formatea solo la hora (HH:mm)
- */
-function formatHora(fecha: Date): string {
-  const hours = String(fecha.getHours()).padStart(2, "0")
-  const minutes = String(fecha.getMinutes()).padStart(2, "0")
-  return `${hours}:${minutes}`
-}
-
-/**
- * Selecciona el evento más grave según prioridad:
- * SOLO considera eventos D1 (Fatiga) y D3 (Distracción) - los únicos eventos reales.
- * Prioridad:
- * 1) Mayor velocidad
- * 2) Evento D1 sobre D3
- * 3) Evento más reciente
- */
-function seleccionarEventoMasGrave(eventos: VehiculoEvento[]): VehiculoEvento | null {
-  if (eventos.length === 0) return null
-
-  // Filtrar SOLO eventos D1 y D3 válidos (los únicos eventos reales)
-  const eventosValidos = eventos.filter(
-    (e) => {
-      const eventoCode = e.evento?.trim()
-      return (
-        (eventoCode === "D1" || eventoCode === "D3") &&
-        e.operador &&
-        e.operador.trim() !== "" &&
-        e.vehiculo &&
-        e.vehiculo.trim() !== ""
-      )
-    }
-  )
-
-  if (eventosValidos.length === 0) return null
-
-  // Ordenar por prioridad
-  const eventosOrdenados = [...eventosValidos].sort((a, b) => {
-    // 1) Prioridad: Mayor velocidad
-    if (a.velocidad !== b.velocidad) {
-      return b.velocidad - a.velocidad
-    }
-
-    // 2) Prioridad: D1 sobre D3
-    const esD1A = a.evento?.trim() === "D1"
-    const esD1B = b.evento?.trim() === "D1"
-
-    if (esD1A && !esD1B) return -1
-    if (!esD1A && esD1B) return 1
-
-    // 3) Prioridad: Evento más reciente
-    return b.fecha.getTime() - a.fecha.getTime()
-  })
-
-  return eventosOrdenados[0]
-}
-
-/**
  * Valida si una dirección tiene formato textual real (no solo números)
  */
 function esDireccionValida(direccion: string): boolean {
@@ -283,28 +211,20 @@ function esDireccionValida(direccion: string): boolean {
   
   const dirTrimmed = direccion.trim()
   
-  // Rechazar si es solo números o strings numéricos ambiguos
   if (/^\d+$/.test(dirTrimmed)) return false
-  
-  // Rechazar si es muy corta (menos de 3 caracteres)
   if (dirTrimmed.length < 3) return false
   
-  // Aceptar si tiene al menos una letra
   return /[a-zA-Z]/.test(dirTrimmed)
 }
 
 /**
  * Formatea la ubicación del evento
- * Solo muestra dirección si tiene formato textual real, sino muestra coordenadas
  */
 function formatUbicacion(evento: VehiculoEvento): string {
-  // Validar que la dirección tenga formato textual real
   if (evento.direccion && esDireccionValida(evento.direccion)) {
     return evento.direccion.trim()
   }
 
-  // Si no hay dirección válida, mostrar coordenadas
-  // Validar que las coordenadas sean válidas (no NaN, no infinitas)
   const lat = evento.latitud
   const lon = evento.longitud
   
@@ -323,151 +243,203 @@ function formatUbicacion(evento: VehiculoEvento): string {
 }
 
 /**
- * Valida si un texto es "humano válido" (no IDs, no patentes, no códigos).
- * Rechaza:
- * - Solo números
- * - Patentes (formato común: letras y números cortos)
- * - IDs técnicos
- * - Textos muy cortos sin contexto
+ * Obtiene el nombre del tipo de evento para el subtítulo
  */
-function esTextoHumanoValido(texto: string): boolean {
-  if (!texto || texto.trim() === "") return false
-  
-  const trimmed = texto.trim()
-  
-  // Rechazar si es muy corto (menos de 5 caracteres)
-  if (trimmed.length < 5) return false
-  
-  // Rechazar si es solo números
-  if (/^\d+$/.test(trimmed)) return false
-  
-  // Rechazar si parece patente (formato común: 3-4 letras seguidas de números, o viceversa)
-  if (/^[A-Z]{1,4}\d{1,4}$/i.test(trimmed) || /^\d{1,4}[A-Z]{1,4}$/i.test(trimmed)) return false
-  
-  // Rechazar si parece ID técnico (solo letras mayúsculas cortas o códigos)
-  if (/^[A-Z]{1,6}$/.test(trimmed) && trimmed.length <= 6) return false
-  
-  // Aceptar si tiene al menos una palabra con contexto (letras y espacios, o texto descriptivo)
-  return /[a-zA-Z]{3,}/.test(trimmed) && trimmed.length >= 5
-}
-
-/**
- * Obtiene la descripción legible del evento.
- * SOLO maneja eventos D1 (Fatiga) y D3 (Distracción) - los únicos eventos reales.
- * 
- * REGLAS:
- * - D1 → "Fatiga – Parpadeo pesado" (o descripción válida si existe)
- * - D3 → "Distracción – Sin mirar al frente" (o descripción válida si existe)
- * - NO usar valores de vehículo como descripción
- * - Solo usar descripcion/texto si contiene texto humano válido (no IDs, no patentes)
- */
-function obtenerDescripcionEvento(evento: VehiculoEvento): string {
+function obtenerTipoEvento(evento: VehiculoEvento): string {
   const eventoCode = evento.evento?.trim()
   
-  // Validar que sea un evento real (D1 o D3)
-  if (eventoCode !== "D1" && eventoCode !== "D3") {
-    // Si no es D1/D3 válido, no debería llegar aquí en el flujo normal
-    // pero por seguridad, retornar descripción genérica
-    return "Evento de seguridad vial"
-  }
-
-  // Evento D1 (Fatiga)
   if (eventoCode === "D1") {
-    // Intentar usar descripción/texto solo si es texto humano válido
-    const descripcion = evento.descripcion?.trim() || evento.texto?.trim() || ""
-    if (descripcion && esTextoHumanoValido(descripcion)) {
-      return `Fatiga – ${descripcion}`
-    }
-    // Fallback: usar descripción estándar
-    return "Fatiga – Parpadeo pesado"
+    return "Microsueño"
   }
-
-  // Evento D3 (Distracción)
+  
   if (eventoCode === "D3") {
-    // Intentar usar descripción/texto solo si es texto humano válido
-    const descripcion = evento.descripcion?.trim() || evento.texto?.trim() || ""
-    if (descripcion && esTextoHumanoValido(descripcion)) {
-      return `Distracción – ${descripcion}`
-    }
-    // Fallback: usar descripción estándar
-    return "Distracción – Sin mirar al frente"
+    return "Distracción"
   }
-
-  // No debería llegar aquí
+  
+  // Si tiene velocidad >= 80, puede considerarse exceso de velocidad
+  if (evento.velocidad >= 80) {
+    return "Exceso de velocidad"
+  }
+  
   return "Evento de seguridad vial"
 }
 
 /**
- * Analiza los eventos reales y genera texto de contexto preventivo
- * basado únicamente en eventos reales (D1/D3) y factores de severidad.
- * 
- * SEPARA CLARAMENTE:
- * - Eventos reales (D1/D3): los únicos eventos que existen
- * - Factores agravantes (velocidad, reincidencia, franja horaria): NO son eventos
- * 
- * NO trata factores como eventos.
+ * Determina el nivel de riesgo del evento individual
+ * Basado en tipo de evento y velocidad
  */
-function generarContextoPreventivo(
-  eventos: VehiculoEvento[],
-  eventosFatiga: number,
-  velocidadMaxima: number,
-  franjaMasRiesgosa: string | null
-): string {
-  if (eventos.length === 0) {
-    return "No hay eventos registrados en el período analizado."
+function determinarNivelRiesgo(evento: VehiculoEvento): NivelRiesgo {
+  const eventoCode = evento.evento?.trim()
+  const velocidad = evento.velocidad || 0
+  
+  // ALTO: D1 (Microsueño) con velocidad >= 80, o D1 sin importar velocidad
+  if (eventoCode === "D1") {
+    return "ALTO"
   }
-
-  const distribution = countD1D3(eventos)
-  const factors = computeFactors(eventos)
-
-  // Construir texto separando claramente eventos reales de factores agravantes
-  const partesEventos: string[] = []
-  const partesFactores: string[] = []
-
-  // EVENTOS REALES: Solo D1 (Fatiga) y D3 (Distracción)
-  if (distribution.d1 > 0) {
-    partesEventos.push(`${distribution.d1} evento${distribution.d1 !== 1 ? "s" : ""} de Fatiga (D1)`)
-  }
-
-  if (distribution.d3 > 0) {
-    partesEventos.push(`${distribution.d3} evento${distribution.d3 !== 1 ? "s" : ""} de Distracción (D3)`)
-  }
-
-  // FACTORES DE SEVERIDAD (agravantes, NO son eventos): Solo mencionar si existen
-  if (factors.altaVelocidad > 0) {
-    partesFactores.push(`${factors.altaVelocidad} evento${factors.altaVelocidad !== 1 ? "s" : ""} con velocidad ≥ 80 km/h`)
-  }
-
-  if (factors.reincidencia > 0) {
-    partesFactores.push(`${factors.reincidencia} día${factors.reincidencia !== 1 ? "s" : ""} con reincidencia crítica`)
-  }
-
-  if (factors.franjaDominante) {
-    partesFactores.push(`Franja horaria dominante: ${factors.franjaDominante}h (${factors.franjaCount} evento${factors.franjaCount !== 1 ? "s" : ""})`)
-  }
-
-  // Construir texto estructurado
-  if (partesEventos.length === 0) {
-    // Solo contar eventos D1/D3 reales
-    const eventosReales = eventos.filter(
-      (e) => e.evento?.trim() === "D1" || e.evento?.trim() === "D3"
-    )
-    if (eventosReales.length === 0) {
-      return "No se registraron eventos críticos (D1 o D3) en el período analizado."
+  
+  // MEDIO: D3 (Distracción) con velocidad >= 80, o D3 sin velocidad alta
+  if (eventoCode === "D3") {
+    if (velocidad >= 80) {
+      return "ALTO"
     }
-    return `Se registraron ${eventosReales.length} evento${eventosReales.length !== 1 ? "s" : ""} crítico${eventosReales.length !== 1 ? "s" : ""} en el período analizado.`
+    return "MEDIO"
   }
-
-  // Construir texto con separación clara
-  let texto = "Eventos críticos registrados: "
-  texto += partesEventos.join(" y ") + "."
-
-  if (partesFactores.length > 0) {
-    texto += " Factores agravantes detectados: "
-    texto += partesFactores.join(", ") + "."
+  
+  // BAJO: Otros casos (exceso de velocidad sin D1/D3)
+  if (velocidad >= 80) {
+    return "MEDIO"
   }
+  
+  return "BAJO"
+}
 
-  return texto
+/**
+ * Selecciona el evento más crítico del período según prioridad:
+ * 1. Microsueño (D1)
+ * 2. Distracción (D3)
+ * 3. Exceso de velocidad (velocidad >= 80)
+ * 
+ * Si hay empate, prioriza mayor velocidad, luego más reciente
+ */
+function seleccionarEventoMasCritico(eventos: VehiculoEvento[]): VehiculoEvento | null {
+  if (eventos.length === 0) return null
+
+  // Filtrar eventos válidos (D1, D3, o con velocidad >= 80)
+  const eventosValidos = eventos.filter(
+    (e) => {
+      const eventoCode = e.evento?.trim()
+      const tieneVelocidadAlta = (e.velocidad || 0) >= 80
+      
+      return (
+        ((eventoCode === "D1" || eventoCode === "D3") &&
+         e.operador &&
+         e.operador.trim() !== "" &&
+         e.vehiculo &&
+         e.vehiculo.trim() !== "") ||
+        (tieneVelocidadAlta &&
+         e.operador &&
+         e.operador.trim() !== "" &&
+         e.vehiculo &&
+         e.vehiculo.trim() !== "")
+      )
+    }
+  )
+
+  if (eventosValidos.length === 0) return null
+
+  // Ordenar por prioridad
+  const eventosOrdenados = [...eventosValidos].sort((a, b) => {
+    const codigoA = a.evento?.trim()
+    const codigoB = b.evento?.trim()
+    const velocidadA = a.velocidad || 0
+    const velocidadB = b.velocidad || 0
+    
+    // Prioridad 1: D1 sobre D3 sobre otros
+    const esD1A = codigoA === "D1"
+    const esD1B = codigoB === "D1"
+    const esD3A = codigoA === "D3"
+    const esD3B = codigoB === "D3"
+    
+    if (esD1A && !esD1B) return -1
+    if (!esD1A && esD1B) return 1
+    if (esD3A && !esD3B) return -1
+    if (!esD3A && esD3B) return 1
+    
+    // Prioridad 2: Mayor velocidad
+    if (velocidadA !== velocidadB) {
+      return velocidadB - velocidadA
+    }
+    
+    // Prioridad 3: Más reciente
+    return b.fecha.getTime() - a.fecha.getTime()
+  })
+
+  return eventosOrdenados[0]
+}
+
+/**
+ * Genera texto explicativo sobre por qué el evento es un riesgo
+ */
+function generarTextoRiesgo(evento: VehiculoEvento): string {
+  const eventoCode = evento.evento?.trim()
+  const velocidad = evento.velocidad || 0
+  
+  if (eventoCode === "D1") {
+    if (velocidad >= 80) {
+      return "Este tipo de evento está asociado a fatiga y disminución de reflejos, incrementando significativamente el riesgo de siniestros viales, especialmente cuando ocurre a alta velocidad en trayectos prolongados o nocturnos."
+    }
+    return "Este tipo de evento está asociado a fatiga y disminución de reflejos, incrementando significativamente el riesgo de siniestros viales, especialmente en trayectos prolongados o nocturnos."
+  }
+  
+  if (eventoCode === "D3") {
+    if (velocidad >= 80) {
+      return "Este tipo de evento indica distracción del conductor, reduciendo su capacidad de reacción ante situaciones imprevistas, lo cual se agrava cuando ocurre a alta velocidad aumentando el riesgo de colisiones."
+    }
+    return "Este tipo de evento indica distracción del conductor, reduciendo su capacidad de reacción ante situaciones imprevistas y aumentando el riesgo de colisiones."
+  }
+  
+  if (velocidad >= 80) {
+    return "El exceso de velocidad reduce significativamente el tiempo de reacción del conductor y aumenta la severidad de posibles siniestros viales."
+  }
+  
+  return "Este evento representa un riesgo para la seguridad vial y requiere atención preventiva."
+}
+
+/**
+ * Genera recomendaciones inmediatas según el tipo de evento
+ */
+function generarRecomendaciones(evento: VehiculoEvento): string[] {
+  const eventoCode = evento.evento?.trim()
+  const velocidad = evento.velocidad || 0
+  const recomendaciones: string[] = []
+  
+  if (eventoCode === "D1") {
+    recomendaciones.push("Reforzar pausas de descanso para el conductor involucrado")
+    recomendaciones.push("Revisar extensión de turnos y horarios de trabajo")
+    recomendaciones.push("Realizar concientización sobre fatiga y sus riesgos")
+  } else if (eventoCode === "D3") {
+    recomendaciones.push("Realizar concientización con el conductor sobre distracciones al volante")
+    recomendaciones.push("Revisar políticas de uso de dispositivos durante la conducción")
+    recomendaciones.push("Evaluar condiciones de trabajo que puedan generar distracciones")
+  } else if (velocidad >= 80) {
+    recomendaciones.push("Reforzar cumplimiento de límites de velocidad establecidos")
+    recomendaciones.push("Realizar concientización sobre riesgos del exceso de velocidad")
+    recomendaciones.push("Revisar sistemas de monitoreo y alertas de velocidad")
+  } else {
+    recomendaciones.push("Revisar protocolos de seguridad vial")
+    recomendaciones.push("Realizar concientización preventiva con el conductor")
+    recomendaciones.push("Evaluar condiciones operativas del vehículo")
+  }
+  
+  // Limitar a máximo 3 recomendaciones
+  return recomendaciones.slice(0, 3)
+}
+
+/**
+ * Genera contexto mínimo opcional (máximo 2 líneas)
+ */
+function generarContextoMinimo(
+  evento: VehiculoEvento,
+  allEventos: VehiculoEvento[]
+): string | null {
+  const distribution = countD1D3(allEventos)
+  const eventoCode = evento.evento?.trim()
+  
+  if (distribution.total === 0) return null
+  
+  // Calcular porcentaje del tipo de evento
+  if (eventoCode === "D1" && distribution.d1 > 0) {
+    const porcentaje = Math.round((distribution.d1 / distribution.total) * 100)
+    return `Este tipo de evento representa el ${porcentaje}% de los eventos críticos del período.`
+  }
+  
+  if (eventoCode === "D3" && distribution.d3 > 0) {
+    const porcentaje = Math.round((distribution.d3 / distribution.total) * 100)
+    return `Este tipo de evento representa el ${porcentaje}% de los eventos críticos del período.`
+  }
+  
+  // Si no aporta claridad, omitir
+  return null
 }
 
 export const SecurityAlertPdf: React.FC<SecurityAlertPdfProps> = ({
@@ -475,157 +447,130 @@ export const SecurityAlertPdf: React.FC<SecurityAlertPdfProps> = ({
   securityAlert,
   kpisEjecutivos,
 }) => {
-  const fechaActual = new Date()
-  const fechaFormateada = formatFecha(fechaActual)
-  const franjaMasRiesgosa = dominantTimeBand(allEventos)
-
-  // Seleccionar el evento más grave
-  const eventoMasGrave = seleccionarEventoMasGrave(allEventos)
-
-  // Determinar si es alerta crítica basado en datos reales
-  const esAlertaCritica =
-    (eventoMasGrave && eventoMasGrave.evento?.trim() === "D1") ||
-    securityAlert.severity === "CRITICAL"
-
-  // Generar contexto preventivo basado únicamente en datos reales
-  const contextoPreventivo = generarContextoPreventivo(
-    allEventos,
-    kpisEjecutivos.eventosFatiga,
-    kpisEjecutivos.velocidadMaxima,
-    franjaMasRiesgosa
-  )
+  // Seleccionar el evento más crítico
+  const eventoCritico = seleccionarEventoMasCritico(allEventos)
+  
+  // Si no hay evento crítico, mostrar mensaje genérico
+  if (!eventoCritico) {
+    return (
+      <Document>
+        <Page size="A4" style={styles.page}>
+          <View style={styles.header}>
+            <Text style={styles.headerTitle}>ALERTA DE SEGURIDAD VIAL</Text>
+            <Text style={styles.headerDate}>
+              {formatFecha(new Date())} - No se detectaron eventos críticos en el período
+            </Text>
+          </View>
+          <View style={styles.cierreSection}>
+            <Text style={styles.cierreText}>
+              Este documento forma parte del sistema de gestión preventiva de seguridad vial
+              y tiene carácter informativo y preventivo.
+            </Text>
+          </View>
+        </Page>
+      </Document>
+    )
+  }
+  
+  const nivelRiesgo = determinarNivelRiesgo(eventoCritico)
+  const tipoEvento = obtenerTipoEvento(eventoCritico)
+  const textoRiesgo = generarTextoRiesgo(eventoCritico)
+  const recomendaciones = generarRecomendaciones(eventoCritico)
+  const contextoMinimo = generarContextoMinimo(eventoCritico, allEventos)
+  
+  // Estilos del badge según nivel de riesgo
+  const badgeStyle = 
+    nivelRiesgo === "ALTO" ? styles.badgeAlto :
+    nivelRiesgo === "MEDIO" ? styles.badgeMedio :
+    styles.badgeBajo
+  
+  const badgeEmoji = 
+    nivelRiesgo === "ALTO" ? "🔴" :
+    nivelRiesgo === "MEDIO" ? "🟠" :
+    "🟡"
 
   return (
     <Document>
       <Page size="A4" style={styles.page}>
-        {/* HEADER - BLOQUE ROJO */}
+        {/* 1) ENCABEZADO */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>ALERTA DE SEGURIDAD VIAL</Text>
-          <Text style={styles.headerDate}>Fecha del reporte: {fechaFormateada}</Text>
-        </View>
-
-        {/* BLOQUE PRINCIPAL - ALERTA */}
-        <View style={styles.alertBlock}>
-          <Text style={styles.alertText}>
-            {esAlertaCritica ? "ALERTA CRÍTICA DE SEGURIDAD" : "EVENTO RELEVANTE DE SEGURIDAD VIAL"}
+          <Text style={styles.headerSubtitle}>{tipoEvento}</Text>
+          <View style={styles.headerBadgeContainer}>
+            <View style={[styles.headerBadge, badgeStyle]}>
+              <Text>{badgeEmoji} {nivelRiesgo}</Text>
+            </View>
+          </View>
+          <Text style={styles.headerDate}>
+            {formatFechaHora(eventoCritico.fecha)}
           </Text>
-
-          {eventoMasGrave ? (
-            <View>
-              <Text style={styles.alertDetails}>
-                El conductor {eventoMasGrave.operador || "N/A"} registró el evento '{obtenerDescripcionEvento(eventoMasGrave)}' el {formatFecha(eventoMasGrave.fecha)} a las {formatHora(eventoMasGrave.fecha)},
-                conduciendo el vehículo {eventoMasGrave.vehiculo || "N/A"}.
-              </Text>
-              <Text style={styles.alertDetails}>
-                Velocidad registrada al momento del evento: {eventoMasGrave.velocidad > 0 ? `${eventoMasGrave.velocidad} km/h` : "N/A"}.
-              </Text>
-              <Text style={styles.alertDetails}>
-                Ubicación: {formatUbicacion(eventoMasGrave)}.
-              </Text>
-            </View>
-          ) : (
-            <Text style={styles.alertDetails}>
-              Se registraron eventos críticos de seguridad vial (D1 y/o D3) en el período analizado.
-            </Text>
-          )}
         </View>
 
-        {/* INDICADORES CLAVE */}
-        <View style={styles.kpiSection}>
-          <Text style={styles.kpiTitle}>INDICADORES CLAVE</Text>
-          <View style={styles.kpiGrid}>
-            {/* Eventos críticos */}
-            <View style={styles.kpiCard}>
-              <Text style={styles.kpiValue}>{kpisEjecutivos.eventosCriticos}</Text>
-              <Text style={styles.kpiLabel}>
-                Eventos críticos{"\n"}
-                <Text style={{ fontSize: 7, fontWeight: "normal" }}>
-                  = D1 (Fatiga) + D3 (Distracción)
-                </Text>
+        {/* 2) HECHO CONCRETO */}
+        <View style={styles.hechoSection}>
+          <Text style={styles.hechoTitle}>Hecho concreto</Text>
+          <View style={styles.hechoCard}>
+            <View style={styles.hechoRow}>
+              <Text style={styles.hechoLabel}>Vehículo / Unidad:</Text>
+              <Text style={styles.hechoValue}>{eventoCritico.vehiculo || "N/A"}</Text>
+            </View>
+            <View style={styles.hechoRow}>
+              <Text style={styles.hechoLabel}>Conductor / Operador:</Text>
+              <Text style={styles.hechoValue}>{eventoCritico.operador || "N/A"}</Text>
+            </View>
+            <View style={styles.hechoRow}>
+              <Text style={styles.hechoLabel}>Fecha y hora:</Text>
+              <Text style={styles.hechoValue}>{formatFechaHora(eventoCritico.fecha)}</Text>
+            </View>
+            <View style={styles.hechoRow}>
+              <Text style={styles.hechoLabel}>Ubicación / Tramo:</Text>
+              <Text style={styles.hechoValue}>{formatUbicacion(eventoCritico)}</Text>
+            </View>
+            <View style={styles.hechoRow}>
+              <Text style={styles.hechoLabel}>Velocidad registrada:</Text>
+              <Text style={styles.hechoValue}>
+                {eventoCritico.velocidad > 0 ? `${eventoCritico.velocidad} km/h` : "N/A"}
               </Text>
             </View>
-
-            {/* Eventos de fatiga */}
-            <View style={styles.kpiCard}>
-              <Text style={styles.kpiValue}>{kpisEjecutivos.eventosFatiga}</Text>
-              <Text style={styles.kpiLabel}>Eventos de fatiga</Text>
-            </View>
-
-            {/* Velocidad máxima */}
-            {kpisEjecutivos.velocidadMaxima > 0 && (
-              <View style={styles.kpiCard}>
-                <Text style={styles.kpiValue}>{kpisEjecutivos.velocidadMaxima} km/h</Text>
-                <Text style={styles.kpiLabel}>Velocidad máxima{"\n"}registrada</Text>
-              </View>
-            )}
-
-            {/* Franja horaria más riesgosa */}
-            {franjaMasRiesgosa && (
-              <View style={styles.kpiCard}>
-                <Text style={styles.kpiValue}>{franjaMasRiesgosa}h</Text>
-                <Text style={styles.kpiLabel}>Franja más riesgosa</Text>
-              </View>
-            )}
-
-            {/* Operadores únicos */}
-            <View style={styles.kpiCard}>
-              <Text style={styles.kpiValue}>{kpisEjecutivos.operadoresUnicos}</Text>
-              <Text style={styles.kpiLabel}>Operadores únicos</Text>
+            <View style={styles.hechoRowLast}>
+              <Text style={styles.hechoLabel}>Tipo de evento detectado:</Text>
+              <Text style={styles.hechoValue}>{tipoEvento}</Text>
             </View>
           </View>
         </View>
 
-        {/* DETALLE DEL EVENTO CRÍTICO */}
-        {eventoMasGrave && (
-          <View style={styles.detailSection}>
-            <Text style={styles.detailTitle}>
-              {esAlertaCritica ? "DETALLE DEL EVENTO CRÍTICO" : "DETALLE DEL EVENTO RELEVANTE"}
-            </Text>
-            <View style={styles.detailTable}>
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Fecha y hora:</Text>
-                <Text style={styles.detailValue}>{formatFechaHora(eventoMasGrave.fecha)}</Text>
-              </View>
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Evento:</Text>
-                <Text style={styles.detailValue}>{obtenerDescripcionEvento(eventoMasGrave)}</Text>
-              </View>
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Operador:</Text>
-                <Text style={styles.detailValue}>{eventoMasGrave.operador || "N/A"}</Text>
-              </View>
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Vehículo:</Text>
-                <Text style={styles.detailValue}>{eventoMasGrave.vehiculo || "N/A"}</Text>
-              </View>
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Velocidad:</Text>
-                <Text style={styles.detailValue}>
-                  {eventoMasGrave.velocidad > 0 ? `${eventoMasGrave.velocidad} km/h (registrada al momento del evento)` : "N/A"}
-                </Text>
-              </View>
-              <View style={styles.detailRowLast}>
-                <Text style={styles.detailLabel}>Ubicación:</Text>
-                <Text style={styles.detailValue}>{formatUbicacion(eventoMasGrave)}</Text>
-              </View>
-            </View>
+        {/* 3) POR QUÉ ES UN RIESGO */}
+        <View style={styles.riesgoSection}>
+          <Text style={styles.riesgoTitle}>Por qué es un riesgo</Text>
+          <Text style={styles.riesgoText}>{textoRiesgo}</Text>
+        </View>
+
+        {/* 4) CONTEXTO MÍNIMO (opcional) */}
+        {contextoMinimo && (
+          <View style={styles.contextoSection}>
+            <Text style={styles.contextoText}>{contextoMinimo}</Text>
           </View>
         )}
 
-        {/* CONTEXTO PREVENTIVO */}
-        <View style={styles.contextBlock}>
-          <Text style={styles.contextText}>
-            {contextoPreventivo}
-          </Text>
+        {/* 5) RECOMENDACIÓN INMEDIATA */}
+        <View style={styles.recomendacionSection}>
+          <Text style={styles.recomendacionTitle}>Recomendación inmediata</Text>
+          <View style={styles.recomendacionList}>
+            {recomendaciones.map((rec, index) => (
+              <View key={index} style={styles.recomendacionItem}>
+                <Text style={styles.recomendacionBullet}>•</Text>
+                <Text style={styles.recomendacionText}>{rec}</Text>
+              </View>
+            ))}
+          </View>
         </View>
 
-        {/* FOOTER */}
-        <View style={styles.footer} fixed>
-          <Text style={styles.footerText}>
-            Documento preventivo generado por el sistema de monitoreo de seguridad vial
+        {/* 6) CIERRE INSTITUCIONAL */}
+        <View style={styles.cierreSection}>
+          <Text style={styles.cierreText}>
+            Este documento forma parte del sistema de gestión preventiva de seguridad vial
+            y tiene carácter informativo y preventivo.
           </Text>
-          <Text style={styles.footerText}>{fechaFormateada}</Text>
-          <Text style={styles.footerPage}>Página 1 / 1</Text>
         </View>
       </Page>
     </Document>

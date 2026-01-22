@@ -304,8 +304,70 @@ function getSeverityLabel(severity: SecurityAlert["severity"]): string {
   }
 }
 
-// Función para generar resumen ejecutivo interpretativo usando nuevo modelo
+// Función para generar resumen ejecutivo interpretativo (para modo executive)
 function generarResumenEjecutivo(
+  distribution: ReturnType<typeof countD1D3>,
+  factors: ReturnType<typeof computeFactors>,
+  vehiculosUnicos: number,
+  operadoresUnicos: number,
+  allEventos: VehiculoEvento[]
+): string {
+  const partes: string[] = []
+
+  // Estado general
+  if (distribution.total === 0) {
+    partes.push("No se registraron eventos de seguridad vial durante el período analizado")
+    partes.push("El estado general es satisfactorio y no se requieren acciones inmediatas")
+    return partes.join(". ") + "."
+  }
+
+  // Estado general y nivel de riesgo
+  const nivelRiesgo = distribution.total >= 50 ? "elevado" : distribution.total >= 20 ? "moderado" : "bajo"
+  partes.push(
+    `El estado general de seguridad vehicular presenta un nivel de riesgo ${nivelRiesgo} con ${distribution.total.toLocaleString()} evento${distribution.total !== 1 ? "s" : ""} registrado${distribution.total !== 1 ? "s" : ""}`
+  )
+
+  // Tendencia dominante
+  if (distribution.pctFatiga >= 60) {
+    partes.push(
+      `La tendencia dominante es la fatiga (D1), representando el ${distribution.pctFatiga.toFixed(1)}% de los eventos`
+    )
+  } else if (distribution.pctDistraccion >= 60) {
+    partes.push(
+      `La tendencia dominante es la distracción (D3), representando el ${distribution.pctDistraccion.toFixed(1)}% de los eventos`
+    )
+  } else {
+    partes.push(
+      `Los eventos se distribuyen de manera equilibrada entre fatiga (${distribution.pctFatiga.toFixed(1)}%) y distracción (${distribution.pctDistraccion.toFixed(1)}%)`
+    )
+  }
+
+  // Principal foco de atención
+  if (factors.reincidencia > 0) {
+    partes.push(
+      `El principal foco de atención es la reincidencia detectada en ${factors.reincidencia} día${factors.reincidencia !== 1 ? "s" : ""} crítico${factors.reincidencia !== 1 ? "s" : ""}, lo que indica patrones de comportamiento que requieren intervención`
+    )
+  } else if (factors.franjaDominante) {
+    const horaInicio = factors.franjaDominante.split("-")[0]
+    const horaFin = factors.franjaDominante.split("-")[1]
+    partes.push(
+      `El principal foco de atención es la concentración de eventos en la franja ${horaInicio}–${horaFin} h, donde se registró el ${((factors.franjaCount / distribution.total) * 100).toFixed(1)}% del total`
+    )
+  } else if (distribution.pctFatiga >= 50) {
+    partes.push(
+      `El principal foco de atención es la alta incidencia de eventos de fatiga, sugiriendo la necesidad de revisar políticas de descanso y turnos`
+    )
+  } else {
+    partes.push(
+      `El principal foco de atención es mantener los controles preventivos y monitorear la evolución de los indicadores`
+    )
+  }
+
+  return partes.join(". ") + "."
+}
+
+// Función para generar resumen ejecutivo técnico (para modo technical, incluye alertas)
+function generarResumenEjecutivoTecnico(
   distribution: ReturnType<typeof countD1D3>,
   factors: ReturnType<typeof computeFactors>,
   vehiculosUnicos: number,
@@ -339,7 +401,7 @@ function generarResumenEjecutivo(
     }
   }
 
-  // Segunda parte: Alertas
+  // Segunda parte: Alertas (solo para modo técnico)
   if (securityAlert.severity !== "OK") {
     const severidadTexto =
       securityAlert.severity === "CRITICAL"
@@ -379,6 +441,67 @@ function generarResumenEjecutivo(
   }
 
   return partes.join(". ") + "."
+}
+
+// Función para generar recomendaciones estratégicas (para modo executive)
+function generarRecomendacionesEstrategicas(
+  distribution: ReturnType<typeof countD1D3>,
+  factors: ReturnType<typeof computeFactors>,
+  top3Operadores: Array<{ operador: string; score: { level: string } }>,
+  top3Vehiculos: Array<{ vehiculo: string; score: { level: string } }>
+): string[] {
+  const recomendaciones: string[] = []
+
+  // Recomendaciones basadas en distribución de eventos
+  if (distribution.pctFatiga >= 50) {
+    recomendaciones.push(
+      "Revisar políticas de descanso y turnos prolongados para reducir la incidencia de eventos de fatiga"
+    )
+  }
+
+  if (distribution.pctDistraccion >= 50) {
+    recomendaciones.push(
+      "Reforzar campañas de concientización sobre distracción al volante y uso de dispositivos móviles"
+    )
+  }
+
+  // Recomendaciones basadas en factores de riesgo
+  if (factors.reincidencia > 0) {
+    recomendaciones.push(
+      "Implementar programas de seguimiento y capacitación para operadores con patrones de reincidencia"
+    )
+  }
+
+  if (factors.franjaDominante) {
+    const horaInicio = factors.franjaDominante.split("-")[0]
+    const horaFin = factors.franjaDominante.split("-")[1]
+    recomendaciones.push(
+      `Ajustar estrategias de monitoreo y controles en la franja horaria ${horaInicio}–${horaFin} h donde se concentra el mayor riesgo`
+    )
+  }
+
+  // Recomendaciones basadas en operadores críticos
+  if (top3Operadores.length > 0) {
+    recomendaciones.push(
+      "Establecer planes de acción específicos para operadores con alto nivel de criticidad identificados en el análisis"
+    )
+  }
+
+  // Recomendaciones basadas en vehículos críticos
+  if (top3Vehiculos.length > 0) {
+    recomendaciones.push(
+      "Priorizar mantenimiento preventivo y revisión técnica en vehículos con mayor criticidad"
+    )
+  }
+
+  // Recomendación general si no hay otras específicas
+  if (recomendaciones.length === 0) {
+    recomendaciones.push(
+      "Mantener los controles preventivos actuales y continuar con el monitoreo sistemático de indicadores de seguridad"
+    )
+  }
+
+  return recomendaciones
 }
 
 // Componente de Footer reutilizable
@@ -424,19 +547,34 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
   const distribution = countD1D3(allEventos)
   const factors = computeFactors(allEventos)
 
-  // Vehículos únicos
-  const vehiculosUnicos = new Set(
+  // Vehículos únicos (con lista de patentes)
+  const vehiculosSet = new Set(
     allEventos
       .map((e) => e.vehiculo?.trim())
       .filter((v) => v && v !== "")
-  ).size
+  )
+  const vehiculosUnicos = vehiculosSet.size
+  const vehiculosLista = Array.from(vehiculosSet).slice(0, 4)
+  const vehiculosRestantes = vehiculosUnicos > 4 ? vehiculosUnicos - 4 : 0
 
-  // Operadores únicos
-  const operadoresUnicos = new Set(
+  // Operadores únicos (con lista de nombres)
+  const operadoresSet = new Set(
     allEventos
       .map((e) => e.operador?.trim())
       .filter((o) => o && o !== "")
-  ).size
+  )
+  const operadoresUnicos = operadoresSet.size
+  const operadoresLista = Array.from(operadoresSet).slice(0, 4)
+  const operadoresRestantes = operadoresUnicos > 4 ? operadoresUnicos - 4 : 0
+
+  // Función para formatear identificador de operador (evitar IDs técnicos crudos)
+  const formatearOperador = (operador: string): string => {
+    // Si parece un ID técnico (solo números o formato técnico), agregar prefijo
+    if (/^\d+$/.test(operador) || operador.match(/^[A-Z0-9_-]+$/)) {
+      return `Operador ${operador}`
+    }
+    return operador
+  }
 
   // Velocidad máxima registrada
   const velocidades = allEventos
@@ -446,26 +584,16 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
 
   const alertStyles = getAlertStyles(securityAlert.severity)
 
-  // Generar resumen ejecutivo interpretativo usando nuevo modelo
-  const resumenEjecutivoTexto = generarResumenEjecutivo(
-    distribution,
-    factors,
-    vehiculosUnicos,
-    operadoresUnicos,
-    allEventos,
-    securityAlert
-  )
-
-  // Calcular rankings usando nuevo modelo para modo executive
+  // Calcular datos para modo executive
   const operadoresProfiles = mode === "executive" ? computeOperatorRiskProfiles(allEventos) : []
   const vehiculosProfiles = mode === "executive" ? computeVehicleRiskProfiles(allEventos) : []
 
-  // Top 3 operadores y vehículos críticos
+  // Top 3 operadores y vehículos críticos (solo HIGH)
   const top3Operadores = operadoresProfiles
-    .filter((op) => op.score.level === "HIGH" && op.score.score > 50)
+    .filter((op) => op.score.level === "HIGH")
     .slice(0, 3)
   const top3Vehiculos = vehiculosProfiles
-    .filter((veh) => veh.score.level === "HIGH" && veh.score.score > 50)
+    .filter((veh) => veh.score.level === "HIGH")
     .slice(0, 3)
 
   // Calcular eventos por tipo (solo D1 y D3) y franja horaria para gráficos
@@ -484,7 +612,7 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
       eventosPorTipo[tipo] = (eventosPorTipo[tipo] || 0) + 1
     }
 
-    // Por franja (para visualización, no como evento)
+    // Por franja horaria
     const hora = evento.fecha.getHours()
     if (hora >= 0 && hora < 6) eventosPorFranja["00-06"]++
     else if (hora >= 6 && hora < 12) eventosPorFranja["06-12"]++
@@ -492,92 +620,60 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
     else if (hora >= 18 && hora < 24) eventosPorFranja["18-24"]++
   })
 
-  // Generar recomendaciones basadas en los datos reales
-  const recomendaciones: string[] = []
-  if (distribution.pctFatiga >= 50) {
-    recomendaciones.push(`Revisar políticas de turnos y descansos debido a alta incidencia de eventos de fatiga (${distribution.pctFatiga.toFixed(1)}%)`)
-  }
-  if (top3Operadores.length > 0) {
-    recomendaciones.push(`Capacitar a los operadores ${top3Operadores.map((o) => o.operador).join(", ")} en prevención de riesgos`)
-  }
-  if (top3Vehiculos.length > 0) {
-    recomendaciones.push(`Realizar mantenimiento preventivo en vehículos ${top3Vehiculos.map((v) => v.vehiculo).join(", ")}`)
-  }
-  const franjaMasEventos = Object.entries(eventosPorFranja).reduce((a, b) =>
-    eventosPorFranja[a[0]] > eventosPorFranja[b[0]] ? a : b
-  )
-  if (franjaMasEventos[1] > 0) {
-    recomendaciones.push(`Reforzar controles en la franja horaria ${franjaMasEventos[0]}h debido a mayor concentración de eventos`)
-  }
+  // Generar resumen ejecutivo y recomendaciones estratégicas (solo para modo executive)
+  const resumenEjecutivoTexto = mode === "executive" 
+    ? generarResumenEjecutivo(distribution, factors, vehiculosUnicos, operadoresUnicos, allEventos)
+    : generarResumenEjecutivoTecnico(distribution, factors, vehiculosUnicos, operadoresUnicos, allEventos, securityAlert)
+  const recomendacionesEstrategicas = mode === "executive"
+    ? generarRecomendacionesEstrategicas(distribution, factors, top3Operadores, top3Vehiculos)
+    : []
 
   if (mode === "executive") {
+    // Obtener período analizado (fechas mínima y máxima)
+    const fechas = allEventos.map((e) => e.fecha).filter((f) => f)
+    const fechaMin = fechas.length > 0 ? new Date(Math.min(...fechas.map((f) => f.getTime()))) : new Date()
+    const fechaMax = fechas.length > 0 ? new Date(Math.max(...fechas.map((f) => f.getTime()))) : new Date()
+    const periodoAnalizado = fechaMin && fechaMax
+      ? `${fechaMin.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" })} - ${fechaMax.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" })}`
+      : fechaGeneracion
+
     return (
       <Document>
-        {/* 1. Portada Ejecutiva */}
+        {/* PÁGINA 1 — PORTADA EJECUTIVA */}
         <Page size="A4" style={styles.page}>
           <View style={styles.executiveCover}>
             <Text style={styles.executiveTitle}>REPORTE EJECUTIVO</Text>
-            <Text style={styles.executiveSubtitle}>Seguridad Vehicular</Text>
-            <Text style={styles.executiveSubtitle}>Análisis de Riesgos y Prioridades</Text>
-            <Text style={styles.executiveDate}>Generado el {fechaGeneracion}</Text>
+            <Text style={styles.executiveSubtitle}>SEGURIDAD VEHICULAR</Text>
+            <View style={{ marginTop: 40, alignItems: "center" }}>
+              <Text style={{ fontSize: 12, color: "#9ca3af", marginBottom: 8 }}>
+                Período analizado: {periodoAnalizado}
+              </Text>
+              <Text style={{ fontSize: 12, color: "#9ca3af", marginBottom: 8 }}>
+                Fecha de generación: {fechaGeneracion}
+              </Text>
+              <Text style={{ fontSize: 12, color: "#9ca3af" }}>
+                Sistema: ControlMapping
+              </Text>
+            </View>
           </View>
           <PdfFooter />
         </Page>
 
-        {/* 2. Resumen Ejecutivo + Alertas de Seguridad */}
+        {/* PÁGINA 2 — RESUMEN EJECUTIVO */}
         <Page size="A4" style={styles.page}>
-          {/* Resumen Ejecutivo */}
-          <View wrap={false} style={styles.sectionSpacer}>
+          <View style={styles.sectionSpacer}>
             <Text style={styles.sectionTitle}>RESUMEN EJECUTIVO</Text>
-            <Text style={[styles.text, { fontSize: 12, lineHeight: 1.8 }]}>
+            <Text style={[styles.text, { fontSize: 12, lineHeight: 1.8, marginTop: 15 }]}>
               {resumenEjecutivoTexto}
             </Text>
           </View>
-
-          {/* Separador visual */}
-          <View style={styles.sectionDivider} />
-
-          {/* Alertas de Seguridad */}
-          <View wrap={false}>
-            <Text style={styles.sectionTitle}>ALERTAS DE SEGURIDAD</Text>
-            <View style={[styles.alertBanner, alertStyles.banner, { padding: 15, marginBottom: 10 }]}>
-              {securityAlert.severity !== "OK" && (
-                <Text style={[styles.alertTitle, alertStyles.title, { fontSize: 14 }]}>
-                  ALERTA {getSeverityLabel(securityAlert.severity)} DE SEGURIDAD
-                </Text>
-              )}
-              <Text style={[styles.alertMessage, alertStyles.message, { fontSize: 11, lineHeight: 1.6 }]}>
-                {securityAlert.message}
-              </Text>
-              {securityAlert.severity !== "OK" && (
-                <View
-                  style={[
-                    styles.alertBadge,
-                    alertStyles.badge[1] || styles.badgeCritical,
-                    { marginTop: 8, padding: 6 },
-                  ]}
-                >
-                  <Text style={{ color: "#ffffff", fontSize: 10, fontWeight: "bold" }}>
-                    {getSeverityLabel(securityAlert.severity)}
-                  </Text>
-                </View>
-              )}
-              {securityAlert.count && (
-                <Text style={[styles.text, alertStyles.message, { marginTop: 8, fontSize: 10 }]}>
-                  Eventos relacionados: {securityAlert.count}
-                </Text>
-              )}
-            </View>
-          </View>
-
           <PdfFooter />
         </Page>
 
-        {/* 3. Indicadores Clave + Prioridades de Intervención */}
+        {/* PÁGINA 3 — ESTADO GENERAL Y KPIs */}
         <Page size="A4" style={styles.page}>
-          {/* KPIs Ejecutivos */}
-          <View wrap={false} style={styles.sectionSpacer}>
-            <Text style={styles.sectionTitle}>INDICADORES CLAVE</Text>
+          <View style={styles.sectionSpacer}>
+            <Text style={styles.sectionTitle}>ESTADO GENERAL Y KPIs</Text>
             <View style={styles.kpiGrid}>
               <View style={styles.kpiCard}>
                 <Text style={styles.kpiLabel}>Total de Eventos</Text>
@@ -585,464 +681,62 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
                 <Text style={styles.kpiSubtext}>D1 + D3</Text>
               </View>
               <View style={styles.kpiCard}>
-                <Text style={styles.kpiLabel}>Fatiga (D1)</Text>
-                <Text style={styles.kpiValue}>{distribution.d1.toLocaleString()}</Text>
-                <Text style={styles.kpiSubtext}>{distribution.pctFatiga.toFixed(1)}%</Text>
+                <Text style={styles.kpiLabel}>% Fatiga (D1)</Text>
+                <Text style={styles.kpiValue}>{distribution.pctFatiga.toFixed(1)}%</Text>
+                <Text style={styles.kpiSubtext}>{distribution.d1.toLocaleString()} eventos</Text>
               </View>
               <View style={styles.kpiCard}>
-                <Text style={styles.kpiLabel}>Distracción (D3)</Text>
-                <Text style={styles.kpiValue}>{distribution.d3.toLocaleString()}</Text>
-                <Text style={styles.kpiSubtext}>{distribution.pctDistraccion.toFixed(1)}%</Text>
+                <Text style={styles.kpiLabel}>% Distracción (D3)</Text>
+                <Text style={styles.kpiValue}>{distribution.pctDistraccion.toFixed(1)}%</Text>
+                <Text style={styles.kpiSubtext}>{distribution.d3.toLocaleString()} eventos</Text>
               </View>
               <View style={styles.kpiCard}>
                 <Text style={styles.kpiLabel}>Vehículos Únicos</Text>
                 <Text style={styles.kpiValue}>{vehiculosUnicos.toLocaleString()}</Text>
+                <Text style={styles.kpiSubtext}>Involucrados</Text>
+                {vehiculosLista.length > 0 && (
+                  <Text style={{ fontSize: 8, color: "#9ca3af", marginTop: 4, lineHeight: 1.3 }}>
+                    {vehiculosLista.join(" · ")}
+                    {vehiculosRestantes > 0 && ` +${vehiculosRestantes} más`}
+                  </Text>
+                )}
               </View>
               <View style={styles.kpiCard}>
                 <Text style={styles.kpiLabel}>Operadores Únicos</Text>
                 <Text style={styles.kpiValue}>{operadoresUnicos.toLocaleString()}</Text>
+                <Text style={styles.kpiSubtext}>Involucrados</Text>
+                {operadoresLista.length > 0 && (
+                  <Text style={{ fontSize: 8, color: "#9ca3af", marginTop: 4, lineHeight: 1.3 }}>
+                    {operadoresLista.map(formatearOperador).join(" · ")}
+                    {operadoresRestantes > 0 && ` +${operadoresRestantes} más`}
+                  </Text>
+                )}
               </View>
-              {velocidadMaxima > 0 && (
-                <View style={styles.kpiCard}>
-                  <Text style={styles.kpiLabel}>Velocidad Máxima</Text>
-                  <Text style={styles.kpiValue}>{velocidadMaxima.toLocaleString()} km/h</Text>
-                </View>
-              )}
             </View>
           </View>
-
-          {/* Separador visual */}
-          {(top3Operadores.length > 0 || top3Vehiculos.length > 0) && (
-            <>
-              <View style={styles.sectionDivider} />
-
-              {/* Prioridades de Intervención */}
-              <View wrap={false}>
-                <Text style={styles.sectionTitle}>PRIORIDADES DE INTERVENCIÓN</Text>
-                
-                {top3Operadores.length > 0 && (
-                  <>
-                    <Text style={styles.subsectionTitle}>Operadores Críticos</Text>
-                    {top3Operadores.map((op, idx) => (
-                      <View key={op.operador} style={styles.priorityCard}>
-                        <Text style={{ fontSize: 11, fontWeight: "bold", marginBottom: 4 }}>
-                          #{idx + 1} - {op.operador}
-                        </Text>
-                        <Text style={{ fontSize: 9, color: "#374151" }}>
-                          Score: {op.score.score.toFixed(1)} ({op.score.level}) • Eventos: {op.totalEventos} • Fatiga (D1): {op.distribution.d1} • Distracción (D3): {op.distribution.d3}
-                        </Text>
-                      </View>
-                    ))}
-                  </>
-                )}
-
-                {top3Vehiculos.length > 0 && (
-                  <>
-                    <Text style={[styles.subsectionTitle, { marginTop: 12 }]}>Vehículos Críticos</Text>
-                    {top3Vehiculos.map((veh, idx) => (
-                      <View key={veh.vehiculo} style={styles.priorityCard}>
-                        <Text style={{ fontSize: 11, fontWeight: "bold", marginBottom: 4 }}>
-                          #{idx + 1} - {veh.vehiculo}
-                        </Text>
-                        <Text style={{ fontSize: 9, color: "#374151" }}>
-                          Score: {veh.score.score.toFixed(1)} ({veh.score.level}) • Eventos: {veh.totalEventos} • Fatiga (D1): {veh.distribution.d1} • Distracción (D3): {veh.distribution.d3}
-                        </Text>
-                      </View>
-                    ))}
-                  </>
-                )}
-              </View>
-            </>
-          )}
-
           <PdfFooter />
         </Page>
 
-        {/* 4. Factores de Riesgo + Rankings (si entran completos) */}
-        {(top3Operadores.length > 0 || top3Vehiculos.length > 0) && (
-          <Page size="A4" style={styles.page}>
-            {/* Factores de Riesgo */}
-            <View wrap={false} style={styles.sectionSpacer}>
-              <Text style={styles.sectionTitle}>FACTORES DE RIESGO DOMINANTES</Text>
-              
-              {top3Operadores.length > 0 && (
-                <>
-                  <Text style={styles.subsectionTitle}>Operadores</Text>
-                  {top3Operadores.map((op) => (
-                    <View key={op.operador} style={{ marginBottom: 12 }}>
-                      <Text style={{ fontSize: 10, fontWeight: "bold", marginBottom: 4 }}>
-                        {op.operador}
-                      </Text>
-                      {/* Distribución de eventos (D1/D3) */}
-                      <View style={{ marginBottom: 6 }}>
-                        <Text style={{ fontSize: 8, color: "#6b7280", marginBottom: 2 }}>
-                          Distribución de eventos:
-                        </Text>
-                        {op.distribution.d1 > 0 && (
-                          <View style={{ marginBottom: 2 }}>
-                            <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 2 }}>
-                              <Text style={{ fontSize: 8, color: "#6b7280" }}>Fatiga (D1):</Text>
-                              <Text style={{ fontSize: 8, fontWeight: "bold", color: "#dc2626" }}>
-                                {op.distribution.d1} ({op.distribution.pctFatiga.toFixed(1)}%)
-                              </Text>
-                            </View>
-                            <View style={[styles.driverBar, { backgroundColor: "#fee2e2", width: "100%" }]}>
-                              <View style={{ height: 6, backgroundColor: "#dc2626", width: `${op.distribution.pctFatiga}%` }} />
-                            </View>
-                          </View>
-                        )}
-                        {op.distribution.d3 > 0 && (
-                          <View style={{ marginBottom: 2 }}>
-                            <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 2 }}>
-                              <Text style={{ fontSize: 8, color: "#6b7280" }}>Distracción (D3):</Text>
-                              <Text style={{ fontSize: 8, fontWeight: "bold", color: "#ea580c" }}>
-                                {op.distribution.d3} ({op.distribution.pctDistraccion.toFixed(1)}%)
-                              </Text>
-                            </View>
-                            <View style={[styles.driverBar, { backgroundColor: "#ffedd5", width: "100%" }]}>
-                              <View style={{ height: 6, backgroundColor: "#ea580c", width: `${op.distribution.pctDistraccion}%` }} />
-                            </View>
-                          </View>
-                        )}
-                      </View>
-                      {/* Factores de severidad */}
-                      {(op.factors.altaVelocidad > 0 || op.factors.reincidencia > 0 || op.factors.franjaDominante) && (
-                        <View style={{ marginTop: 4, paddingTop: 4, borderTopWidth: 1, borderTopColor: "#e5e7eb" }}>
-                          <Text style={{ fontSize: 8, color: "#6b7280", marginBottom: 2 }}>
-                            Factores de riesgo:
-                          </Text>
-                          {op.factors.altaVelocidad > 0 && (
-                            <Text style={{ fontSize: 8, color: "#6b7280" }}>
-                              • Alta velocidad: {op.factors.altaVelocidad} evento{op.factors.altaVelocidad !== 1 ? "s" : ""}
-                            </Text>
-                          )}
-                          {op.factors.reincidencia > 0 && (
-                            <Text style={{ fontSize: 8, color: "#6b7280" }}>
-                              • Reincidencia: {op.factors.reincidencia} día{op.factors.reincidencia !== 1 ? "s" : ""} crítico{op.factors.reincidencia !== 1 ? "s" : ""}
-                            </Text>
-                          )}
-                          {op.factors.franjaDominante && (
-                            <Text style={{ fontSize: 8, color: "#6b7280" }}>
-                              • Franja dominante: {op.factors.franjaDominante}h ({op.factors.franjaCount} evento{op.factors.franjaCount !== 1 ? "s" : ""})
-                            </Text>
-                          )}
-                        </View>
-                      )}
-                    </View>
-                  ))}
-                </>
-              )}
-
-              {top3Vehiculos.length > 0 && (
-                <>
-                  <Text style={[styles.subsectionTitle, { marginTop: 12 }]}>Vehículos</Text>
-                  {top3Vehiculos.map((veh) => (
-                    <View key={veh.vehiculo} style={{ marginBottom: 12 }}>
-                      <Text style={{ fontSize: 10, fontWeight: "bold", marginBottom: 4 }}>
-                        {veh.vehiculo}
-                      </Text>
-                      {/* Distribución de eventos (D1/D3) */}
-                      <View style={{ marginBottom: 6 }}>
-                        <Text style={{ fontSize: 8, color: "#6b7280", marginBottom: 2 }}>
-                          Distribución de eventos:
-                        </Text>
-                        {veh.distribution.d1 > 0 && (
-                          <View style={{ marginBottom: 2 }}>
-                            <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 2 }}>
-                              <Text style={{ fontSize: 8, color: "#6b7280" }}>Fatiga (D1):</Text>
-                              <Text style={{ fontSize: 8, fontWeight: "bold", color: "#dc2626" }}>
-                                {veh.distribution.d1} ({veh.distribution.pctFatiga.toFixed(1)}%)
-                              </Text>
-                            </View>
-                            <View style={[styles.driverBar, { backgroundColor: "#fee2e2", width: "100%" }]}>
-                              <View style={{ height: 6, backgroundColor: "#dc2626", width: `${veh.distribution.pctFatiga}%` }} />
-                            </View>
-                          </View>
-                        )}
-                        {veh.distribution.d3 > 0 && (
-                          <View style={{ marginBottom: 2 }}>
-                            <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 2 }}>
-                              <Text style={{ fontSize: 8, color: "#6b7280" }}>Distracción (D3):</Text>
-                              <Text style={{ fontSize: 8, fontWeight: "bold", color: "#ea580c" }}>
-                                {veh.distribution.d3} ({veh.distribution.pctDistraccion.toFixed(1)}%)
-                              </Text>
-                            </View>
-                            <View style={[styles.driverBar, { backgroundColor: "#ffedd5", width: "100%" }]}>
-                              <View style={{ height: 6, backgroundColor: "#ea580c", width: `${veh.distribution.pctDistraccion}%` }} />
-                            </View>
-                          </View>
-                        )}
-                      </View>
-                      {/* Factores de severidad */}
-                      {(veh.factors.altaVelocidad > 0 || veh.factors.reincidencia > 0 || veh.factors.franjaDominante) && (
-                        <View style={{ marginTop: 4, paddingTop: 4, borderTopWidth: 1, borderTopColor: "#e5e7eb" }}>
-                          <Text style={{ fontSize: 8, color: "#6b7280", marginBottom: 2 }}>
-                            Factores de riesgo:
-                          </Text>
-                          {veh.factors.altaVelocidad > 0 && (
-                            <Text style={{ fontSize: 8, color: "#6b7280" }}>
-                              • Alta velocidad: {veh.factors.altaVelocidad} evento{veh.factors.altaVelocidad !== 1 ? "s" : ""}
-                            </Text>
-                          )}
-                          {veh.factors.reincidencia > 0 && (
-                            <Text style={{ fontSize: 8, color: "#6b7280" }}>
-                              • Reincidencia: {veh.factors.reincidencia} día{veh.factors.reincidencia !== 1 ? "s" : ""} crítico{veh.factors.reincidencia !== 1 ? "s" : ""}
-                            </Text>
-                          )}
-                          {veh.factors.franjaDominante && (
-                            <Text style={{ fontSize: 8, color: "#6b7280" }}>
-                              • Franja dominante: {veh.factors.franjaDominante}h ({veh.factors.franjaCount} evento{veh.factors.franjaCount !== 1 ? "s" : ""})
-                            </Text>
-                          )}
-                        </View>
-                      )}
-                    </View>
-                  ))}
-                </>
-              )}
-            </View>
-
-            {/* Separador visual - solo si hay rankings para mostrar */}
-            {(operadoresProfiles.length > 0 || vehiculosProfiles.length > 0) && (
-              <>
-                <View style={styles.sectionDivider} />
-
-                {/* Rankings Resumidos */}
-                <View wrap={false}>
-                  <Text style={styles.sectionTitle}>RANKINGS DE RIESGO</Text>
-                  
-                  {operadoresProfiles.length > 0 && (
-                    <>
-                      <Text style={styles.subsectionTitle}>Top 10 Operadores por Score de Riesgo</Text>
-                      <View style={{ marginBottom: 15 }}>
-                        {operadoresProfiles.slice(0, 10).map((op, idx) => (
-                          <View
-                            key={op.operador}
-                            style={{
-                              flexDirection: "row",
-                              justifyContent: "space-between",
-                              paddingVertical: 5,
-                              paddingHorizontal: 8,
-                              backgroundColor: idx % 2 === 0 ? "#f9fafb" : "#ffffff",
-                              borderLeftWidth: op.score.level === "HIGH" ? 3 : op.score.level === "MEDIUM" ? 2 : 1,
-                              borderLeftColor:
-                                op.score.level === "HIGH" ? "#dc2626" : op.score.level === "MEDIUM" ? "#eab308" : "#22c55e",
-                              marginBottom: 2,
-                            }}
-                          >
-                            <View style={{ flexDirection: "row", flex: 1 }}>
-                              <Text style={{ fontSize: 9, color: "#6b7280", width: 25 }}>
-                                #{idx + 1}
-                              </Text>
-                              <Text style={{ fontSize: 9, fontWeight: op.score.level === "HIGH" ? "bold" : "normal", flex: 1 }}>
-                                {op.operador}
-                              </Text>
-                            </View>
-                            <View style={{ flexDirection: "row", gap: 10 }}>
-                              <Text style={{ fontSize: 9, color: "#6b7280", width: 40 }}>
-                                Score: {op.score.score.toFixed(1)}
-                              </Text>
-                              <Text
-                                style={{
-                                  fontSize: 9,
-                                  color:
-                                    op.score.level === "HIGH" ? "#dc2626" : op.score.level === "MEDIUM" ? "#eab308" : "#22c55e",
-                                  fontWeight: "bold",
-                                  width: 50,
-                                }}
-                              >
-                                {op.score.level}
-                              </Text>
-                            </View>
-                          </View>
-                        ))}
-                      </View>
-                    </>
-                  )}
-
-                  {vehiculosProfiles.length > 0 && (
-                    <>
-                      <Text style={[styles.subsectionTitle, { marginTop: 10 }]}>Top 10 Vehículos por Score de Riesgo</Text>
-                      <View>
-                        {vehiculosProfiles.slice(0, 10).map((veh, idx) => (
-                          <View
-                            key={veh.vehiculo}
-                            style={{
-                              flexDirection: "row",
-                              justifyContent: "space-between",
-                              paddingVertical: 5,
-                              paddingHorizontal: 8,
-                              backgroundColor: idx % 2 === 0 ? "#f9fafb" : "#ffffff",
-                              borderLeftWidth: veh.score.level === "HIGH" ? 3 : veh.score.level === "MEDIUM" ? 2 : 1,
-                              borderLeftColor:
-                                veh.score.level === "HIGH" ? "#dc2626" : veh.score.level === "MEDIUM" ? "#eab308" : "#22c55e",
-                              marginBottom: 2,
-                            }}
-                          >
-                            <View style={{ flexDirection: "row", flex: 1 }}>
-                              <Text style={{ fontSize: 9, color: "#6b7280", width: 25 }}>
-                                #{idx + 1}
-                              </Text>
-                              <Text style={{ fontSize: 9, fontWeight: veh.score.level === "HIGH" ? "bold" : "normal", flex: 1 }}>
-                                {veh.vehiculo}
-                              </Text>
-                            </View>
-                            <View style={{ flexDirection: "row", gap: 10 }}>
-                              <Text style={{ fontSize: 9, color: "#6b7280", width: 40 }}>
-                                Score: {veh.score.score.toFixed(1)}
-                              </Text>
-                              <Text
-                                style={{
-                                  fontSize: 9,
-                                  color:
-                                    veh.score.level === "HIGH" ? "#dc2626" : veh.score.level === "MEDIUM" ? "#eab308" : "#22c55e",
-                                  fontWeight: "bold",
-                                  width: 50,
-                                }}
-                              >
-                                {veh.score.level}
-                              </Text>
-                            </View>
-                          </View>
-                        ))}
-                      </View>
-                    </>
-                  )}
-                </View>
-              </>
-            )}
-
-            <PdfFooter />
-          </Page>
-        )}
-
-        {/* 5. Rankings Resumidos (página propia si no entraron en la anterior) */}
-        {((top3Operadores.length === 0 && top3Vehiculos.length === 0) && (operadoresProfiles.length > 0 || vehiculosProfiles.length > 0)) && (
-          <Page size="A4" style={styles.page}>
-            <View wrap={false} style={styles.section}>
-              <Text style={styles.sectionTitle}>RANKINGS DE RIESGO</Text>
-              
-              {operadoresProfiles.length > 0 && (
-                <>
-                  <Text style={styles.subsectionTitle}>Top 10 Operadores por Score de Riesgo</Text>
-                  <View style={{ marginBottom: 15 }}>
-                    {operadoresProfiles.slice(0, 10).map((op, idx) => (
-                      <View
-                        key={op.operador}
-                        style={{
-                          flexDirection: "row",
-                          justifyContent: "space-between",
-                          paddingVertical: 5,
-                          paddingHorizontal: 8,
-                          backgroundColor: idx % 2 === 0 ? "#f9fafb" : "#ffffff",
-                          borderLeftWidth: op.score.level === "HIGH" ? 3 : op.score.level === "MEDIUM" ? 2 : 1,
-                          borderLeftColor:
-                            op.score.level === "HIGH" ? "#dc2626" : op.score.level === "MEDIUM" ? "#eab308" : "#22c55e",
-                          marginBottom: 2,
-                        }}
-                      >
-                        <View style={{ flexDirection: "row", flex: 1 }}>
-                          <Text style={{ fontSize: 9, color: "#6b7280", width: 25 }}>
-                            #{idx + 1}
-                          </Text>
-                          <Text style={{ fontSize: 9, fontWeight: op.score.level === "HIGH" ? "bold" : "normal", flex: 1 }}>
-                            {op.operador}
-                          </Text>
-                        </View>
-                        <View style={{ flexDirection: "row", gap: 10 }}>
-                          <Text style={{ fontSize: 9, color: "#6b7280", width: 40 }}>
-                            Score: {op.score.score.toFixed(1)}
-                          </Text>
-                          <Text
-                            style={{
-                              fontSize: 9,
-                              color:
-                                op.score.level === "HIGH" ? "#dc2626" : op.score.level === "MEDIUM" ? "#eab308" : "#22c55e",
-                              fontWeight: "bold",
-                              width: 50,
-                            }}
-                          >
-                            {op.score.level}
-                          </Text>
-                        </View>
-                      </View>
-                    ))}
-                  </View>
-                </>
-              )}
-
-              {vehiculosProfiles.length > 0 && (
-                <>
-                  <Text style={[styles.subsectionTitle, { marginTop: 10 }]}>Top 10 Vehículos por Score de Riesgo</Text>
-                  <View>
-                    {vehiculosProfiles.slice(0, 10).map((veh, idx) => (
-                      <View
-                        key={veh.vehiculo}
-                        style={{
-                          flexDirection: "row",
-                          justifyContent: "space-between",
-                          paddingVertical: 5,
-                          paddingHorizontal: 8,
-                          backgroundColor: idx % 2 === 0 ? "#f9fafb" : "#ffffff",
-                          borderLeftWidth: veh.score.level === "HIGH" ? 3 : veh.score.level === "MEDIUM" ? 2 : 1,
-                          borderLeftColor:
-                            veh.score.level === "HIGH" ? "#dc2626" : veh.score.level === "MEDIUM" ? "#eab308" : "#22c55e",
-                          marginBottom: 2,
-                        }}
-                      >
-                        <View style={{ flexDirection: "row", flex: 1 }}>
-                          <Text style={{ fontSize: 9, color: "#6b7280", width: 25 }}>
-                            #{idx + 1}
-                          </Text>
-                          <Text style={{ fontSize: 9, fontWeight: veh.score.level === "HIGH" ? "bold" : "normal", flex: 1 }}>
-                            {veh.vehiculo}
-                          </Text>
-                        </View>
-                        <View style={{ flexDirection: "row", gap: 10 }}>
-                          <Text style={{ fontSize: 9, color: "#6b7280", width: 40 }}>
-                            Score: {veh.score.score.toFixed(1)}
-                          </Text>
-                          <Text
-                            style={{
-                              fontSize: 9,
-                              color:
-                                veh.score.level === "HIGH" ? "#dc2626" : veh.score.level === "MEDIUM" ? "#eab308" : "#22c55e",
-                              fontWeight: "bold",
-                              width: 50,
-                            }}
-                          >
-                            {veh.score.level}
-                          </Text>
-                        </View>
-                      </View>
-                    ))}
-                  </View>
-                </>
-              )}
-            </View>
-            <PdfFooter />
-          </Page>
-        )}
-
-        {/* 6. Análisis de Contexto + Recomendaciones (agrupadas) */}
+        {/* PÁGINA 4 — DISTRIBUCIÓN DE RIESGOS */}
         <Page size="A4" style={styles.page}>
-          {/* Gráficos de Contexto */}
-          <View wrap={false} style={styles.sectionSpacer}>
-            <Text style={styles.sectionTitle}>ANÁLISIS DE CONTEXTO</Text>
+          <View style={styles.sectionSpacer}>
+            <Text style={styles.sectionTitle}>DISTRIBUCIÓN DE RIESGOS</Text>
             
-            <Text style={styles.subsectionTitle}>Distribución por Tipo de Evento</Text>
+            <Text style={[styles.subsectionTitle, { marginTop: 15 }]}>Distribución por Tipo de Evento</Text>
             {distribution.d1 > 0 && (
-              <View style={{ marginBottom: 8 }}>
-                <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 3 }}>
-                  <Text style={{ fontSize: 10 }}>Fatiga (D1)</Text>
-                  <Text style={{ fontSize: 10, fontWeight: "bold" }}>{distribution.d1}</Text>
+              <View style={{ marginBottom: 15 }}>
+                <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 5 }}>
+                  <Text style={{ fontSize: 11 }}>Fatiga (D1)</Text>
+                  <Text style={{ fontSize: 11, fontWeight: "bold" }}>
+                    {distribution.d1} ({distribution.pctFatiga.toFixed(1)}%)
+                  </Text>
                 </View>
-                <View style={{ height: 6, backgroundColor: "#e5e7eb", borderRadius: 2 }}>
+                <View style={{ height: 8, backgroundColor: "#e5e7eb", borderRadius: 2 }}>
                   <View
                     style={{
-                      height: 6,
+                      height: 8,
                       backgroundColor: "#dc2626",
-                      width: `${distribution.total > 0 ? (distribution.d1 / distribution.total) * 100 : 0}%`,
+                      width: `${distribution.pctFatiga}%`,
                       borderRadius: 2,
                     }}
                   />
@@ -1050,17 +744,19 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
               </View>
             )}
             {distribution.d3 > 0 && (
-              <View style={{ marginBottom: 8 }}>
-                <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 3 }}>
-                  <Text style={{ fontSize: 10 }}>Distracción (D3)</Text>
-                  <Text style={{ fontSize: 10, fontWeight: "bold" }}>{distribution.d3}</Text>
+              <View style={{ marginBottom: 15 }}>
+                <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 5 }}>
+                  <Text style={{ fontSize: 11 }}>Distracción (D3)</Text>
+                  <Text style={{ fontSize: 11, fontWeight: "bold" }}>
+                    {distribution.d3} ({distribution.pctDistraccion.toFixed(1)}%)
+                  </Text>
                 </View>
-                <View style={{ height: 6, backgroundColor: "#e5e7eb", borderRadius: 2 }}>
+                <View style={{ height: 8, backgroundColor: "#e5e7eb", borderRadius: 2 }}>
                   <View
                     style={{
-                      height: 6,
+                      height: 8,
                       backgroundColor: "#ea580c",
-                      width: `${distribution.total > 0 ? (distribution.d3 / distribution.total) * 100 : 0}%`,
+                      width: `${distribution.pctDistraccion}%`,
                       borderRadius: 2,
                     }}
                   />
@@ -1068,49 +764,140 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
               </View>
             )}
 
-            <Text style={[styles.subsectionTitle, { marginTop: 15 }]}>Distribución por Franja Horaria</Text>
-            <Text style={{ fontSize: 9, color: "#6b7280", marginBottom: 8, fontStyle: "italic" }}>
-              (Factor de severidad - no es un tipo de evento)
-            </Text>
-            {Object.entries(eventosPorFranja).map(([franja, cantidad]) => (
-              <View key={franja} style={{ marginBottom: 8 }}>
-                <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 3 }}>
-                  <Text style={{ fontSize: 10 }}>{franja}h</Text>
-                  <Text style={{ fontSize: 10, fontWeight: "bold" }}>{cantidad}</Text>
-                </View>
-                <View style={{ height: 6, backgroundColor: "#e5e7eb", borderRadius: 2 }}>
-                  <View
-                    style={{
-                      height: 6,
-                      backgroundColor: franja === factors.franjaDominante ? "#dc2626" : "#3b82f6",
-                      width: `${distribution.total > 0 ? (cantidad / distribution.total) * 100 : 0}%`,
-                      borderRadius: 2,
-                    }}
-                  />
-                </View>
-              </View>
-            ))}
+            {Object.values(eventosPorFranja).some((v) => v > 0) && (
+              <>
+                <Text style={[styles.subsectionTitle, { marginTop: 20 }]}>Distribución por Franja Horaria</Text>
+                {Object.entries(eventosPorFranja)
+                  .filter(([_, cantidad]) => cantidad > 0)
+                  .map(([franja, cantidad]) => {
+                    const porcentaje = distribution.total > 0 ? (cantidad / distribution.total) * 100 : 0
+                    return (
+                      <View key={franja} style={{ marginBottom: 12 }}>
+                        <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 5 }}>
+                          <Text style={{ fontSize: 11 }}>{franja}h</Text>
+                          <Text style={{ fontSize: 11, fontWeight: "bold" }}>
+                            {cantidad} ({porcentaje.toFixed(1)}%)
+                          </Text>
+                        </View>
+                        <View style={{ height: 8, backgroundColor: "#e5e7eb", borderRadius: 2 }}>
+                          <View
+                            style={{
+                              height: 8,
+                              backgroundColor: franja === factors.franjaDominante ? "#dc2626" : "#3b82f6",
+                              width: `${porcentaje}%`,
+                              borderRadius: 2,
+                            }}
+                          />
+                        </View>
+                      </View>
+                    )
+                  })}
+              </>
+            )}
           </View>
+          <PdfFooter />
+        </Page>
 
-          {/* Separador visual - solo si hay recomendaciones */}
-          {recomendaciones.length > 0 && (
-            <>
-              <View style={styles.sectionDivider} />
+        {/* PÁGINA 5 — FOCOS DE ATENCIÓN */}
+        <Page size="A4" style={styles.page}>
+          <View style={styles.sectionSpacer}>
+            <Text style={styles.sectionTitle}>FOCOS DE ATENCIÓN</Text>
+            <Text style={[styles.text, { fontSize: 10, color: "#6b7280", marginBottom: 20, fontStyle: "italic" }]}>
+              Prioridades identificadas para intervención inmediata
+            </Text>
+            
+            {top3Operadores.length > 0 && (
+              <>
+                <Text style={styles.subsectionTitle}>Top 3 Operadores con Mayor Criticidad</Text>
+                {top3Operadores.map((op, idx) => {
+                  const motivoPrincipal = op.distribution.d1 > op.distribution.d3 ? "Fatiga (D1)" : op.distribution.d3 > op.distribution.d1 ? "Distracción (D3)" : "Mixto"
+                  return (
+                    <View key={op.operador} style={[styles.priorityCard, { marginBottom: 12 }]}>
+                      <Text style={{ fontSize: 12, fontWeight: "bold", marginBottom: 6 }}>
+                        #{idx + 1} - {op.operador}
+                      </Text>
+                      <Text style={{ fontSize: 10, color: "#374151", marginBottom: 4 }}>
+                        Nivel de severidad: <Text style={{ fontWeight: "bold", color: "#dc2626" }}>{op.score.level}</Text>
+                      </Text>
+                      <Text style={{ fontSize: 10, color: "#374151" }}>
+                        Motivo principal: <Text style={{ fontWeight: "bold" }}>{motivoPrincipal}</Text>
+                      </Text>
+                      {op.factors.reincidencia > 0 && (
+                        <Text style={{ fontSize: 9, color: "#6b7280", marginTop: 4 }}>
+                          Reincidencia detectada: {op.factors.reincidencia} día{op.factors.reincidencia !== 1 ? "s" : ""} crítico{op.factors.reincidencia !== 1 ? "s" : ""}
+                        </Text>
+                      )}
+                    </View>
+                  )
+                })}
+              </>
+            )}
 
-              {/* Recomendaciones Finales */}
-              <View wrap={false}>
-                <Text style={styles.sectionTitle}>RECOMENDACIONES</Text>
-                {recomendaciones.map((rec, idx) => (
-                  <View key={idx} style={styles.recommendationBox}>
-                    <Text style={{ fontSize: 11, lineHeight: 1.6 }}>
-                      {idx + 1}. {rec}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            </>
-          )}
+            {top3Vehiculos.length > 0 && (
+              <>
+                <Text style={[styles.subsectionTitle, { marginTop: top3Operadores.length > 0 ? 20 : 0 }]}>
+                  Top 3 Vehículos con Mayor Criticidad
+                </Text>
+                {top3Vehiculos.map((veh, idx) => {
+                  const motivoPrincipal = veh.distribution.d1 > veh.distribution.d3 ? "Fatiga (D1)" : veh.distribution.d3 > veh.distribution.d1 ? "Distracción (D3)" : "Mixto"
+                  return (
+                    <View key={veh.vehiculo} style={[styles.priorityCard, { marginBottom: 12 }]}>
+                      <Text style={{ fontSize: 12, fontWeight: "bold", marginBottom: 6 }}>
+                        #{idx + 1} - {veh.vehiculo}
+                      </Text>
+                      <Text style={{ fontSize: 10, color: "#374151", marginBottom: 4 }}>
+                        Nivel de severidad: <Text style={{ fontWeight: "bold", color: "#dc2626" }}>{veh.score.level}</Text>
+                      </Text>
+                      <Text style={{ fontSize: 10, color: "#374151" }}>
+                        Motivo principal: <Text style={{ fontWeight: "bold" }}>{motivoPrincipal}</Text>
+                      </Text>
+                      {veh.factors.reincidencia > 0 && (
+                        <Text style={{ fontSize: 9, color: "#6b7280", marginTop: 4 }}>
+                          Reincidencia detectada: {veh.factors.reincidencia} día{veh.factors.reincidencia !== 1 ? "s" : ""} crítico{veh.factors.reincidencia !== 1 ? "s" : ""}
+                        </Text>
+                      )}
+                    </View>
+                  )
+                })}
+              </>
+            )}
 
+            {top3Operadores.length === 0 && top3Vehiculos.length === 0 && (
+              <Text style={[styles.text, { fontSize: 11, color: "#6b7280", fontStyle: "italic" }]}>
+                No se identificaron operadores o vehículos con nivel de criticidad HIGH durante el período analizado.
+              </Text>
+            )}
+          </View>
+          <PdfFooter />
+        </Page>
+
+        {/* PÁGINA 6 — INTERPRETACIÓN Y RECOMENDACIONES */}
+        <Page size="A4" style={styles.page}>
+          <View style={styles.sectionSpacer}>
+            <Text style={styles.sectionTitle}>INTERPRETACIÓN Y RECOMENDACIONES</Text>
+            
+            <Text style={[styles.subsectionTitle, { marginTop: 15 }]}>Interpretación Técnica</Text>
+            <Text style={[styles.text, { fontSize: 11, lineHeight: 1.7, marginBottom: 20 }]}>
+              {distribution.total === 0 
+                ? "El análisis del período no muestra eventos de seguridad vial registrados, indicando un estado operativo estable."
+                : `El escenario observado muestra ${distribution.total} evento${distribution.total !== 1 ? "s" : ""} de seguridad vial, con una distribución ${distribution.pctFatiga >= 50 ? "predominante de fatiga" : distribution.pctDistraccion >= 50 ? "predominante de distracción" : "equilibrada"} entre ambos tipos de eventos. ${factors.reincidencia > 0 ? `Se detectaron ${factors.reincidencia} día${factors.reincidencia !== 1 ? "s" : ""} con reincidencia, lo que sugiere patrones de comportamiento que requieren atención.` : ""} ${factors.franjaDominante ? `La concentración temporal en la franja ${factors.franjaDominante}h indica posibles factores operativos o ambientales específicos de ese horario.` : ""}`}
+            </Text>
+
+            <Text style={[styles.subsectionTitle, { marginTop: 20 }]}>Recomendaciones Estratégicas</Text>
+            {recomendacionesEstrategicas.length > 0 ? (
+              recomendacionesEstrategicas.map((rec, idx) => (
+                <View key={idx} style={[styles.recommendationBox, { marginBottom: 12 }]}>
+                  <Text style={{ fontSize: 11, lineHeight: 1.6 }}>
+                    {idx + 1}. {rec}
+                  </Text>
+                </View>
+              ))
+            ) : (
+              <Text style={[styles.text, { fontSize: 11, color: "#6b7280", fontStyle: "italic" }]}>
+                No se requieren recomendaciones específicas en este momento. Se recomienda mantener los controles preventivos actuales.
+              </Text>
+            )}
+          </View>
           <PdfFooter />
         </Page>
       </Document>
@@ -1130,83 +917,91 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
         <PdfFooter />
       </Page>
 
-      {/* Alertas de Seguridad */}
+      {/* Alertas de Seguridad (Componente chico - NO SPLITTABLE) */}
       <Page size="A4" style={styles.page}>
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>ALERTAS DE SEGURIDAD</Text>
+        <View wrap={false} break style={styles.section}>
+          <View wrap={false} minPresenceAhead={150}>
+            <Text style={styles.sectionTitle}>ALERTAS DE SEGURIDAD</Text>
 
-          <View style={[styles.alertBanner, alertStyles.banner]}>
-            {securityAlert.severity !== "OK" && (
-              <Text style={[styles.alertTitle, alertStyles.title]}>
-                ALERTA {getSeverityLabel(securityAlert.severity)} DE SEGURIDAD
-              </Text>
-            )}
-            <Text style={[styles.alertMessage, alertStyles.message]}>
-              {securityAlert.message}
-            </Text>
-            {securityAlert.severity !== "OK" && (
-              <View style={alertStyles.badge}>
-                <Text style={{ color: "#ffffff", fontSize: 10, fontWeight: "bold" }}>
-                  {getSeverityLabel(securityAlert.severity)}
+            <View style={[styles.alertBanner, alertStyles.banner]}>
+              {securityAlert.severity !== "OK" && (
+                <Text style={[styles.alertTitle, alertStyles.title]}>
+                  ALERTA {getSeverityLabel(securityAlert.severity)} DE SEGURIDAD
                 </Text>
-              </View>
-            )}
-            {securityAlert.count && (
-              <Text style={[styles.text, alertStyles.message, { marginTop: 5 }]}>
-                Eventos relacionados: {securityAlert.count}
+              )}
+              <Text style={[styles.alertMessage, alertStyles.message]}>
+                {securityAlert.message}
               </Text>
-            )}
-          </View>
+              {securityAlert.severity !== "OK" && (
+                <View style={alertStyles.badge}>
+                  <Text style={{ color: "#ffffff", fontSize: 10, fontWeight: "bold" }}>
+                    {getSeverityLabel(securityAlert.severity)}
+                  </Text>
+                </View>
+              )}
+              {securityAlert.count && (
+                <Text style={[styles.text, alertStyles.message, { marginTop: 5 }]}>
+                  Eventos relacionados: {securityAlert.count}
+                </Text>
+              )}
+            </View>
 
-          <Text style={styles.text}>
-            Las alertas de seguridad se generan automáticamente basándose en reglas de prevención
-            de riesgos. Se recomienda revisar y tomar acciones preventivas según la severidad indicada.
-          </Text>
+            <Text style={styles.text}>
+              Las alertas de seguridad se generan automáticamente basándose en reglas de prevención
+              de riesgos. Se recomienda revisar y tomar acciones preventivas según la severidad indicada.
+            </Text>
+          </View>
         </View>
 
         <PdfFooter />
       </Page>
 
-      {/* Resumen Ejecutivo del Período */}
+      {/* Resumen Ejecutivo del Período (Componente grande - SPLITTABLE) */}
       <Page size="A4" style={styles.page}>
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>RESUMEN EJECUTIVO DEL PERÍODO</Text>
+        <View break style={styles.section}>
+          <View wrap={false} minPresenceAhead={150}>
+            <Text style={styles.sectionTitle}>RESUMEN EJECUTIVO DEL PERÍODO</Text>
+          </View>
 
-          <Text style={styles.subsectionTitle}>Análisis Interpretativo</Text>
-          <Text style={[styles.text, { marginBottom: 20, lineHeight: 1.8 }]}>
-            {resumenEjecutivoTexto}
-          </Text>
+          <View wrap={false} minPresenceAhead={100}>
+            <Text style={styles.subsectionTitle}>Análisis Interpretativo</Text>
+            <Text style={[styles.text, { marginBottom: 20, lineHeight: 1.8 }]}>
+              {resumenEjecutivoTexto}
+            </Text>
+          </View>
 
-          <Text style={styles.subsectionTitle}>Indicadores Clave</Text>
-          <View style={styles.kpiGrid}>
-            <View style={styles.kpiCard}>
-              <Text style={styles.kpiLabel}>Total de Eventos</Text>
-              <Text style={styles.kpiValue}>{distribution.total.toLocaleString()}</Text>
-              <Text style={[styles.kpiLabel, { fontSize: 9, marginTop: 3 }]}>D1 + D3</Text>
-            </View>
-            <View style={styles.kpiCard}>
-              <Text style={styles.kpiLabel}>Fatiga (D1)</Text>
-              <Text style={styles.kpiValue}>{distribution.d1.toLocaleString()}</Text>
-              <Text style={[styles.kpiLabel, { fontSize: 9, marginTop: 3 }]}>{distribution.pctFatiga.toFixed(1)}%</Text>
-            </View>
-            <View style={styles.kpiCard}>
-              <Text style={styles.kpiLabel}>Distracción (D3)</Text>
-              <Text style={styles.kpiValue}>{distribution.d3.toLocaleString()}</Text>
-              <Text style={[styles.kpiLabel, { fontSize: 9, marginTop: 3 }]}>{distribution.pctDistraccion.toFixed(1)}%</Text>
-            </View>
-            <View style={styles.kpiCard}>
-              <Text style={styles.kpiLabel}>Vehículos Únicos</Text>
-              <Text style={styles.kpiValue}>{vehiculosUnicos.toLocaleString()}</Text>
-            </View>
-            <View style={styles.kpiCard}>
-              <Text style={styles.kpiLabel}>Operadores Únicos</Text>
-              <Text style={styles.kpiValue}>{operadoresUnicos.toLocaleString()}</Text>
+          <View wrap={false} minPresenceAhead={200}>
+            <Text style={styles.subsectionTitle}>Indicadores Clave</Text>
+            <View style={styles.kpiGrid}>
+              <View style={styles.kpiCard}>
+                <Text style={styles.kpiLabel}>Total de Eventos</Text>
+                <Text style={styles.kpiValue}>{distribution.total.toLocaleString()}</Text>
+                <Text style={[styles.kpiLabel, { fontSize: 9, marginTop: 3 }]}>D1 + D3</Text>
+              </View>
+              <View style={styles.kpiCard}>
+                <Text style={styles.kpiLabel}>Fatiga (D1)</Text>
+                <Text style={styles.kpiValue}>{distribution.d1.toLocaleString()}</Text>
+                <Text style={[styles.kpiLabel, { fontSize: 9, marginTop: 3 }]}>{distribution.pctFatiga.toFixed(1)}%</Text>
+              </View>
+              <View style={styles.kpiCard}>
+                <Text style={styles.kpiLabel}>Distracción (D3)</Text>
+                <Text style={styles.kpiValue}>{distribution.d3.toLocaleString()}</Text>
+                <Text style={[styles.kpiLabel, { fontSize: 9, marginTop: 3 }]}>{distribution.pctDistraccion.toFixed(1)}%</Text>
+              </View>
+              <View style={styles.kpiCard}>
+                <Text style={styles.kpiLabel}>Vehículos Únicos</Text>
+                <Text style={styles.kpiValue}>{vehiculosUnicos.toLocaleString()}</Text>
+              </View>
+              <View style={styles.kpiCard}>
+                <Text style={styles.kpiLabel}>Operadores Únicos</Text>
+                <Text style={styles.kpiValue}>{operadoresUnicos.toLocaleString()}</Text>
+              </View>
             </View>
           </View>
           
           {/* Factores de Riesgo */}
           {(factors.altaVelocidad > 0 || factors.reincidencia > 0 || factors.franjaDominante) && (
-            <View style={{ marginTop: 15, padding: 12, backgroundColor: "#fffbeb", borderRadius: 4 }}>
+            <View wrap={false} minPresenceAhead={100} style={{ marginTop: 15, padding: 12, backgroundColor: "#fffbeb", borderRadius: 4 }}>
               <Text style={{ fontSize: 11, fontWeight: "bold", color: "#78350f", marginBottom: 6 }}>
                 Factores de Riesgo Detectados:
               </Text>
@@ -1234,92 +1029,102 @@ export const VehiculoEventosPdfReport: React.FC<VehiculoEventosPdfReportProps> =
         <PdfFooter />
       </Page>
 
-      {/* Análisis de Eventos */}
+      {/* Análisis de Eventos (Componente grande - SPLITTABLE) */}
       <Page size="A4" style={styles.page}>
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>ANÁLISIS DE EVENTOS</Text>
-
-          <Text style={styles.subsectionTitle}>Resumen Ejecutivo</Text>
-          <Text style={styles.text}>
-            El análisis de eventos vehiculares muestra un total de {distribution.total.toLocaleString()} eventos
-            registrados en {data.length} archivo{data.length !== 1 ? "s" : ""} procesado{data.length !== 1 ? "s" : ""}.
-            Los eventos registrados incluyen {distribution.d1.toLocaleString()} eventos de fatiga (D1) y {distribution.d3.toLocaleString()} eventos de distracción (D3).
-          </Text>
-
-          <Text style={styles.text}>
-            El análisis abarca {vehiculosUnicos.toLocaleString()} vehículo{vehiculosUnicos !== 1 ? "s" : ""} único{vehiculosUnicos !== 1 ? "s" : ""} y{" "}
-            {operadoresUnicos.toLocaleString()} operador{operadoresUnicos !== 1 ? "es" : ""} único{operadoresUnicos !== 1 ? "s" : ""}.
-            {velocidadMaxima > 0 && (
-              <> La velocidad máxima registrada fue de {velocidadMaxima.toLocaleString()} km/h.</>
-            )}
-          </Text>
-
-          <Text style={styles.subsectionTitle}>Indicadores Ejecutivos</Text>
-          <View style={styles.kpiGrid}>
-            <View style={styles.kpiCard}>
-              <Text style={styles.kpiLabel}>Fatiga (D1)</Text>
-              <Text style={styles.kpiValue}>{distribution.d1.toLocaleString()}</Text>
-              <Text style={[styles.kpiLabel, { fontSize: 9, marginTop: 3 }]}>{distribution.pctFatiga.toFixed(1)}%</Text>
-            </View>
-            <View style={styles.kpiCard}>
-              <Text style={styles.kpiLabel}>Distracción (D3)</Text>
-              <Text style={styles.kpiValue}>{distribution.d3.toLocaleString()}</Text>
-              <Text style={[styles.kpiLabel, { fontSize: 9, marginTop: 3 }]}>{distribution.pctDistraccion.toFixed(1)}%</Text>
-            </View>
-            <View style={styles.kpiCard}>
-              <Text style={styles.kpiLabel}>Vehículos Únicos</Text>
-              <Text style={styles.kpiValue}>{vehiculosUnicos.toLocaleString()}</Text>
-              <Text style={[styles.kpiLabel, { fontSize: 9, marginTop: 3 }]}>Total distintos</Text>
-            </View>
-            <View style={styles.kpiCard}>
-              <Text style={styles.kpiLabel}>Operadores Únicos</Text>
-              <Text style={styles.kpiValue}>{operadoresUnicos.toLocaleString()}</Text>
-              <Text style={[styles.kpiLabel, { fontSize: 9, marginTop: 3 }]}>Total distintos</Text>
-            </View>
-            {velocidadMaxima > 0 && (
-              <View style={styles.kpiCard}>
-                <Text style={styles.kpiLabel}>Velocidad Máxima</Text>
-                <Text style={styles.kpiValue}>{velocidadMaxima.toLocaleString()}</Text>
-                <Text style={[styles.kpiLabel, { fontSize: 9, marginTop: 3 }]}>km/h</Text>
-              </View>
-            )}
+        <View break style={styles.section}>
+          <View wrap={false} minPresenceAhead={150}>
+            <Text style={styles.sectionTitle}>ANÁLISIS DE EVENTOS</Text>
           </View>
 
-          <Text style={styles.text}>
-            Estos indicadores proporcionan una visión general del estado de seguridad vehicular
-            y permiten identificar áreas que requieren atención inmediata o seguimiento continuo.
-          </Text>
+          <View wrap={false} minPresenceAhead={100}>
+            <Text style={styles.subsectionTitle}>Resumen Ejecutivo</Text>
+            <Text style={styles.text}>
+              El análisis de eventos vehiculares muestra un total de {distribution.total.toLocaleString()} eventos
+              registrados en {data.length} archivo{data.length !== 1 ? "s" : ""} procesado{data.length !== 1 ? "s" : ""}.
+              Los eventos registrados incluyen {distribution.d1.toLocaleString()} eventos de fatiga (D1) y {distribution.d3.toLocaleString()} eventos de distracción (D3).
+            </Text>
+
+            <Text style={styles.text}>
+              El análisis abarca {vehiculosUnicos.toLocaleString()} vehículo{vehiculosUnicos !== 1 ? "s" : ""} único{vehiculosUnicos !== 1 ? "s" : ""} y{" "}
+              {operadoresUnicos.toLocaleString()} operador{operadoresUnicos !== 1 ? "es" : ""} único{operadoresUnicos !== 1 ? "s" : ""}.
+              {velocidadMaxima > 0 && (
+                <> La velocidad máxima registrada fue de {velocidadMaxima.toLocaleString()} km/h.</>
+              )}
+            </Text>
+          </View>
+
+          <View wrap={false} minPresenceAhead={200}>
+            <Text style={styles.subsectionTitle}>Indicadores Ejecutivos</Text>
+            <View style={styles.kpiGrid}>
+              <View style={styles.kpiCard}>
+                <Text style={styles.kpiLabel}>Fatiga (D1)</Text>
+                <Text style={styles.kpiValue}>{distribution.d1.toLocaleString()}</Text>
+                <Text style={[styles.kpiLabel, { fontSize: 9, marginTop: 3 }]}>{distribution.pctFatiga.toFixed(1)}%</Text>
+              </View>
+              <View style={styles.kpiCard}>
+                <Text style={styles.kpiLabel}>Distracción (D3)</Text>
+                <Text style={styles.kpiValue}>{distribution.d3.toLocaleString()}</Text>
+                <Text style={[styles.kpiLabel, { fontSize: 9, marginTop: 3 }]}>{distribution.pctDistraccion.toFixed(1)}%</Text>
+              </View>
+              <View style={styles.kpiCard}>
+                <Text style={styles.kpiLabel}>Vehículos Únicos</Text>
+                <Text style={styles.kpiValue}>{vehiculosUnicos.toLocaleString()}</Text>
+                <Text style={[styles.kpiLabel, { fontSize: 9, marginTop: 3 }]}>Total distintos</Text>
+              </View>
+              <View style={styles.kpiCard}>
+                <Text style={styles.kpiLabel}>Operadores Únicos</Text>
+                <Text style={styles.kpiValue}>{operadoresUnicos.toLocaleString()}</Text>
+                <Text style={[styles.kpiLabel, { fontSize: 9, marginTop: 3 }]}>Total distintos</Text>
+              </View>
+              {velocidadMaxima > 0 && (
+                <View style={styles.kpiCard}>
+                  <Text style={styles.kpiLabel}>Velocidad Máxima</Text>
+                  <Text style={styles.kpiValue}>{velocidadMaxima.toLocaleString()}</Text>
+                  <Text style={[styles.kpiLabel, { fontSize: 9, marginTop: 3 }]}>km/h</Text>
+                </View>
+              )}
+            </View>
+          </View>
+
+          <View wrap={false} minPresenceAhead={50}>
+            <Text style={styles.text}>
+              Estos indicadores proporcionan una visión general del estado de seguridad vehicular
+              y permiten identificar áreas que requieren atención inmediata o seguimiento continuo.
+            </Text>
+          </View>
         </View>
 
         <PdfFooter />
       </Page>
 
-      {/* Resumen Ejecutivo */}
+      {/* Resumen Ejecutivo (Componente chico - NO SPLITTABLE) */}
       <Page size="A4" style={styles.page}>
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Resumen Ejecutivo</Text>
+        <View wrap={false} break style={styles.section}>
+          <View wrap={false} minPresenceAhead={200}>
+            <Text style={styles.sectionTitle}>Resumen Ejecutivo</Text>
 
-          <Text style={styles.subsectionTitle}>Indicadores Principales</Text>
-          <View style={styles.kpiGrid}>
-            <View style={styles.kpiCard}>
-              <Text style={styles.kpiLabel}>Total de Eventos</Text>
-              <Text style={styles.kpiValue}>{distribution.total.toLocaleString()}</Text>
-              <Text style={[styles.kpiLabel, { fontSize: 9, marginTop: 3 }]}>D1 + D3</Text>
-            </View>
-            <View style={styles.kpiCard}>
-              <Text style={styles.kpiLabel}>Tipos de Evento</Text>
-              <Text style={styles.kpiValue}>{distribution.d1 > 0 && distribution.d3 > 0 ? 2 : distribution.total > 0 ? 1 : 0}</Text>
-              <Text style={[styles.kpiLabel, { fontSize: 9, marginTop: 3 }]}>D1, D3</Text>
-            </View>
-            <View style={styles.kpiCard}>
-              <Text style={styles.kpiLabel}>Archivos Procesados</Text>
-              <Text style={styles.kpiValue}>{data.length}</Text>
-            </View>
-            <View style={styles.kpiCard}>
-              <Text style={styles.kpiLabel}>Estado de Seguridad</Text>
-              <Text style={[styles.kpiValue, alertStyles.title]}>
-                {getSeverityLabel(securityAlert.severity)}
-              </Text>
+            <Text style={styles.subsectionTitle}>Indicadores Principales</Text>
+            <View style={styles.kpiGrid}>
+              <View style={styles.kpiCard}>
+                <Text style={styles.kpiLabel}>Total de Eventos</Text>
+                <Text style={styles.kpiValue}>{distribution.total.toLocaleString()}</Text>
+                <Text style={[styles.kpiLabel, { fontSize: 9, marginTop: 3 }]}>D1 + D3</Text>
+              </View>
+              <View style={styles.kpiCard}>
+                <Text style={styles.kpiLabel}>Tipos de Evento</Text>
+                <Text style={styles.kpiValue}>{distribution.d1 > 0 && distribution.d3 > 0 ? 2 : distribution.total > 0 ? 1 : 0}</Text>
+                <Text style={[styles.kpiLabel, { fontSize: 9, marginTop: 3 }]}>D1, D3</Text>
+              </View>
+              <View style={styles.kpiCard}>
+                <Text style={styles.kpiLabel}>Archivos Procesados</Text>
+                <Text style={styles.kpiValue}>{data.length}</Text>
+              </View>
+              <View style={styles.kpiCard}>
+                <Text style={styles.kpiLabel}>Estado de Seguridad</Text>
+                <Text style={[styles.kpiValue, alertStyles.title]}>
+                  {getSeverityLabel(securityAlert.severity)}
+                </Text>
+              </View>
             </View>
           </View>
         </View>

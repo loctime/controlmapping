@@ -7,163 +7,12 @@ import { FileUploadZone } from "@/components/file-upload-zone"
 import { ExcelViewerFidel } from "@/components/excel-viewer-fidel"
 import { FloatingMappingPanel } from "@/components/flotante-mapping-panel"
 import { Header } from "@/components/header"
-import { MultiFileUpload } from "@/components/multi-file-upload"
-import { ResultTable } from "@/components/result-table"
-import { saveSchemaTemplate, getSchemaTemplates, getSchemaTemplate } from "@/lib/firebase"
-import { parseAudit, type AuditFile } from "@/domains/audit"
+import { getSchemaTemplates, getSchemaTemplate, saveMapping } from "@/lib/firebase"
 import type { CellMapping, ExcelData, SchemaTemplate, SchemaInstance, SchemaFieldMapping } from "@/types/excel"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 import { Card } from "@/components/ui/card"
 
-// Schema Template de Auditoría
-const AUDIT_SCHEMA_TEMPLATE: SchemaTemplate = {
-  schemaId: "audit-standard-v1",
-  name: "Auditoría estándar",
-  description: "Schema base para auditorías de higiene, seguridad u operativas",
-  version: 1,
-  type: "audit",
-  headerFields: [
-    {
-      role: "operacion",
-      label: "Operación",
-      required: true,
-      description: "Nombre o identificación de la operación auditada"
-    },
-    {
-      role: "responsable_operacion",
-      label: "Responsable de la operación",
-      required: false
-    },
-    {
-      role: "cliente",
-      label: "Cliente",
-      required: true
-    },
-    {
-      role: "fecha",
-      label: "Fecha de auditoría",
-      required: true,
-      dataType: "date"
-    },
-    {
-      role: "auditor",
-      label: "Auditor",
-      required: true
-    },
-    {
-      role: "cantidad_items",
-      label: "Cantidad de ítems",
-      required: true,
-      dataType: "number"
-    },
-    {
-      role: "cantidad_cumple",
-      label: "Cantidad Cumple",
-      required: false,
-      dataType: "number",
-      description: "Cantidad total de ítems que cumplen (valor final desde Excel)"
-    },
-    {
-      role: "cantidad_cumple_parcial",
-      label: "Cantidad Cumple Parcial",
-      required: false,
-      dataType: "number",
-      description: "Cantidad total de ítems que cumplen parcialmente (valor final desde Excel)"
-    },
-    {
-      role: "cantidad_no_cumple",
-      label: "Cantidad No Cumple",
-      required: false,
-      dataType: "number",
-      description: "Cantidad total de ítems que no cumplen (valor final desde Excel)"
-    },
-    {
-      role: "cantidad_no_aplica",
-      label: "Cantidad No Aplica",
-      required: false,
-      dataType: "number",
-      description: "Cantidad total de ítems que no aplican (valor final desde Excel)"
-    },
-    {
-      role: "cumplimiento_total_pct",
-      label: "% de cumplimiento total",
-      required: true,
-      dataType: "percentage"
-    },
-    {
-      role: "puntos_obtenidos",
-      label: "Puntos obtenidos",
-      required: false,
-      dataType: "number"
-    },
-    {
-      role: "porcentaje_cumple",
-      label: "% Cumple",
-      required: false,
-      dataType: "percentage"
-    },
-    {
-      role: "porcentaje_cumple_parcial",
-      label: "% Cumple Parcial",
-      required: false,
-      dataType: "percentage"
-    },
-    {
-      role: "porcentaje_no_cumple",
-      label: "% No cumple",
-      required: false,
-      dataType: "percentage"
-    },
-    {
-      role: "porcentaje_no_aplica",
-      label: "% No aplica",
-      required: false,
-      dataType: "percentage"
-    }
-  ],
-  table: {
-    description: "Tabla principal de preguntas / ítems auditados",
-    columns: [
-      {
-        role: "pregunta",
-        label: "Pregunta / Ítem",
-        required: true,
-        dataType: "string"
-      },
-      {
-        role: "cumple",
-        label: "Cumple",
-        required: false,
-        dataType: "boolean"
-      },
-      {
-        role: "cumple_parcial",
-        label: "Cumple parcial",
-        required: false,
-        dataType: "boolean"
-      },
-      {
-        role: "no_cumple",
-        label: "No cumple",
-        required: false,
-        dataType: "boolean"
-      },
-      {
-        role: "no_aplica",
-        label: "No aplica",
-        required: false,
-        dataType: "boolean"
-      },
-      {
-        role: "observaciones",
-        label: "Observaciones",
-        required: false,
-        dataType: "string"
-      }
-    ]
-  }
-}
 
 export default function MappingPage() {
   const [excelData, setExcelData] = useState<ExcelData | null>(null)
@@ -184,30 +33,13 @@ export default function MappingPage() {
   const [currentHeaderFieldIndex, setCurrentHeaderFieldIndex] = useState(0)
   const [currentTableFieldIndex, setCurrentTableFieldIndex] = useState(0)
   const [draftCellOrColumn, setDraftCellOrColumn] = useState<string | null>(null)
-  
-  // Estados para procesamiento de auditorías
-  const [auditFiles, setAuditFiles] = useState<File[]>([])
-  const [auditResults, setAuditResults] = useState<AuditFile[]>([])
-  const [isProcessingAudits, setIsProcessingAudits] = useState(false)
-  const [showAuditResults, setShowAuditResults] = useState(false)
 
   // Cargar schemas disponibles al montar
   useEffect(() => {
     const loadSchemas = async () => {
       setIsLoadingSchemas(true)
       try {
-        // Guardar schemas conocidos primero (para asegurar que estén disponibles)
-        await saveSchemaTemplate(AUDIT_SCHEMA_TEMPLATE).catch((err) => {
-          console.error("Error al guardar SchemaTemplate de auditoría:", err)
-        })
-        
-        // Importar y guardar schema de vehículos
-        const { VEHICULO_EVENTOS_V1_SCHEMA } = await import("@/domains/vehiculo/config")
-        await saveSchemaTemplate(VEHICULO_EVENTOS_V1_SCHEMA).catch((err) => {
-          console.error("Error al guardar SchemaTemplate de vehículos:", err)
-        })
-        
-        // Cargar todos los schemas disponibles
+        // Cargar todos los schemas disponibles desde Firestore
         const schemas = await getSchemaTemplates()
         setAvailableSchemas(schemas)
         
@@ -561,148 +393,38 @@ export default function MappingPage() {
     setMappings(mappings.filter((m) => m.id !== id))
   }
 
-  const handleSaveSchema = () => {
-    if (!excelData) return
+  const handleSaveSchema = async () => {
+    if (!excelData || !schemaTemplate) return
 
-    const schemaInstance: SchemaInstance = {
-      schemaId: schemaTemplate.schemaId,
-      schemaVersion: schemaTemplate.version,
-      fileName: excelData.fileName,
-      headerMappings,
-      tableMappings,
-      createdAt: new Date(),
-    }
-
-    console.log("Schema instance guardado:", schemaInstance)
-    const blob = new Blob([JSON.stringify(schemaInstance, null, 2)], { type: "application/json" })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = `schema-instance-${Date.now()}.json`
-    a.click()
-  }
-
-  // Función para leer un archivo Excel y convertirlo a ExcelData (versión simplificada sin estilos)
-  const readExcelFile = async (file: File): Promise<ExcelData> => {
-    const arrayBuffer = await file.arrayBuffer()
-    const workbook = XLSX.read(arrayBuffer, {
-      type: "array",
-      cellStyles: false,
-      cellHTML: false,
-    })
-
-    const firstSheetName = workbook.SheetNames[0]
-    const worksheet = workbook.Sheets[firstSheetName]
-    const range = XLSX.utils.decode_range(worksheet["!ref"] || "A1")
-
-    const cells: Record<string, { value: string | number }> = {}
-
-    for (let R = range.s.r; R <= range.e.r; R++) {
-      for (let C = range.s.c; C <= range.e.c; C++) {
-        const cellAddress = XLSX.utils.encode_cell({ r: R, c: C })
-        const cell = worksheet[cellAddress]
-
-        if (cell) {
-          let cellValue: string | number = ""
-          if (cell.v !== undefined && cell.v !== null) {
-            if (cell.t === "n") {
-              cellValue = cell.v as number
-            } else if (cell.t === "b") {
-              cellValue = cell.v ? "TRUE" : "FALSE"
-            } else {
-              cellValue = String(cell.v)
-            }
-          }
-
-          cells[cellAddress] = {
-            value: cellValue,
-          }
-        }
-      }
-    }
-
-    return {
-      fileName: file.name,
-      sheets: [
-        {
-          name: firstSheetName,
-          rows: range.e.r + 1,
-          cols: range.e.c + 1,
-          cells,
-        },
-      ],
-    }
-  }
-
-  // Función para procesar auditorías usando el parser
-  const handleProcessAudits = async () => {
-    if (auditFiles.length === 0) {
-      alert("Por favor seleccioná al menos un archivo Excel para procesar")
-      return
-    }
-
-    if (headerMappings.length === 0 && tableMappings.length === 0) {
-      alert("Por favor completá el mapeo antes de procesar auditorías")
-      return
-    }
-
-    setIsProcessingAudits(true)
-    setAuditResults([])
-    setShowAuditResults(false)
+    const name = prompt("Ingresá un nombre para este mapping:")
+    if (!name) return
 
     try {
-      // Construir el SchemaInstance actual
       const schemaInstance: SchemaInstance = {
         schemaId: schemaTemplate.schemaId,
         schemaVersion: schemaTemplate.version,
-        fileName: "", // No importa para procesamiento
-        headerMappings: [...headerMappings],
-        tableMappings: [...tableMappings],
+        fileName: excelData.fileName,
+        headerMappings,
+        tableMappings,
         createdAt: new Date(),
       }
 
-      const results: AuditFile[] = []
-      const errors: string[] = []
-
-      // Procesar cada archivo
-      for (let i = 0; i < auditFiles.length; i++) {
-        const file = auditFiles[i]
-        try {
-          console.log(`Procesando archivo ${i + 1}/${auditFiles.length}: ${file.name}`)
-          
-          // Leer el archivo Excel
-          const excelData = await readExcelFile(file)
-          
-          // Parsear usando el parser
-          const auditFile = parseAudit(excelData, schemaTemplate, schemaInstance)
-          
-          results.push(auditFile)
-          console.log(`✅ Archivo procesado: ${file.name}`)
-        } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : "Error desconocido"
-          console.error(`❌ Error al procesar ${file.name}:`, errorMessage)
-          errors.push(`${file.name}: ${errorMessage}`)
-          // Continuar con el siguiente archivo sin romper el proceso
-        }
-      }
-
-      if (results.length > 0) {
-        setAuditResults(results)
-        setShowAuditResults(true)
-        
-        if (errors.length > 0) {
-          alert(`Se procesaron ${results.length} archivo(s) correctamente.\n\nErrores:\n${errors.join("\n")}`)
-        }
-      } else {
-        alert(`No se pudo procesar ningún archivo.\n\nErrores:\n${errors.join("\n")}`)
-      }
+      await saveMapping({ ...schemaInstance, name })
+      alert("Mapping guardado exitosamente en Firestore")
+      
+      // También exportar como JSON
+      const blob = new Blob([JSON.stringify(schemaInstance, null, 2)], { type: "application/json" })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `schema-instance-${Date.now()}.json`
+      a.click()
     } catch (error) {
-      console.error("Error al procesar auditorías:", error)
-      alert(`Error al procesar auditorías: ${error instanceof Error ? error.message : "Error desconocido"}`)
-    } finally {
-      setIsProcessingAudits(false)
+      console.error("Error al guardar mapping:", error)
+      alert(`Error al guardar mapping: ${error instanceof Error ? error.message : "Error desconocido"}`)
     }
   }
+
 
   return (
     <div className="h-screen flex flex-col bg-background">
@@ -720,9 +442,6 @@ export default function MappingPage() {
           setCurrentHeaderFieldIndex(0)
           setCurrentTableFieldIndex(0)
           setDraftCellOrColumn(null)
-          setAuditFiles([])
-          setAuditResults([])
-          setShowAuditResults(false)
         }}
         onToggleMappingPanel={() => setIsMappingPanelOpen(!isMappingPanelOpen)}
         isMappingPanelOpen={isMappingPanelOpen}
@@ -806,94 +525,37 @@ export default function MappingPage() {
           </div>
         ) : (
           <>
-            {showAuditResults ? (
-              /* Vista de resultados consolidados */
-              <div className="flex-1 overflow-auto p-4">
-                <ResultTable auditResults={auditResults} />
-                <div className="mt-4 flex justify-end">
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setShowAuditResults(false)
-                      setAuditResults([])
-                    }}
-                  >
-                    Volver al mapeo
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <>
-                {/* Excel Viewer - Ocupa todo el espacio disponible */}
-                <div className="flex-1 overflow-hidden min-h-0 relative">
-                  <ExcelViewerFidel
-                    data={excelData}
-                    mappings={mappings}
-                    selectedCell={selectedCell}
-                    onCellSelect={handleCellSelect}
-                    zoom={zoom}
-                    onZoomChange={setZoom}
-                  />
-                </div>
-                
-                {/* Panel flotante de mapeo */}
-                {schemaTemplate && (
-                  <FloatingMappingPanel
-                    excelData={excelData}
-                    selectedCell={selectedCell}
-                    schemaTemplate={schemaTemplate}
-                  headerMappings={headerMappings}
-                  tableMappings={tableMappings}
-                  currentHeaderFieldIndex={currentHeaderFieldIndex}
-                  setCurrentHeaderFieldIndex={setCurrentHeaderFieldIndex}
-                  currentTableFieldIndex={currentTableFieldIndex}
-                  setCurrentTableFieldIndex={setCurrentTableFieldIndex}
-                  draftCellOrColumn={draftCellOrColumn}
-                  setDraftCellOrColumn={setDraftCellOrColumn}
-                  onHeaderFieldMapped={handleHeaderFieldMapped}
-                  onTableFieldMapped={handleTableFieldMapped}
-                  onRemoveLastHeaderMapping={handleRemoveLastHeaderMapping}
-                  onRemoveLastTableMapping={handleRemoveLastTableMapping}
-                  />
-                )}
-                
-                {/* Panel de procesamiento de auditorías */}
-                <div className="border-t border-border bg-card p-4">
-                  <div className="max-w-4xl mx-auto space-y-4">
-                    <div>
-                      <h3 className="text-lg font-semibold text-foreground mb-2">
-                        Procesar auditorías
-                      </h3>
-                      <p className="text-sm text-muted-foreground mb-4">
-                        Subí uno o varios archivos Excel con el mismo formato y procesalos usando el mapeo actual
-                      </p>
-                    </div>
-                    
-                    <MultiFileUpload files={auditFiles} onFilesChange={setAuditFiles} />
-                    
-                    <div className="flex items-center justify-between">
-                      <div className="text-sm text-muted-foreground">
-                        {auditFiles.length > 0 && (
-                          <span>
-                            {auditFiles.length} archivo{auditFiles.length !== 1 ? "s" : ""} seleccionado{auditFiles.length !== 1 ? "s" : ""}
-                            {headerMappings.length + tableMappings.length > 0 && (
-                              <span className="ml-2">
-                                • {headerMappings.length + tableMappings.length} campo{headerMappings.length + tableMappings.length !== 1 ? "s" : ""} mapeado{headerMappings.length + tableMappings.length !== 1 ? "s" : ""}
-                              </span>
-                            )}
-                          </span>
-                        )}
-                      </div>
-                      <Button
-                        onClick={handleProcessAudits}
-                        disabled={auditFiles.length === 0 || isProcessingAudits || (headerMappings.length === 0 && tableMappings.length === 0)}
-                      >
-                        {isProcessingAudits ? "Procesando..." : "Procesar auditorías"}
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </>
+            {/* Excel Viewer - Ocupa todo el espacio disponible */}
+            <div className="flex-1 overflow-hidden min-h-0 relative">
+              <ExcelViewerFidel
+                data={excelData}
+                mappings={mappings}
+                selectedCell={selectedCell}
+                onCellSelect={handleCellSelect}
+                zoom={zoom}
+                onZoomChange={setZoom}
+              />
+            </div>
+            
+            {/* Panel flotante de mapeo */}
+            {schemaTemplate && (
+              <FloatingMappingPanel
+                excelData={excelData}
+                selectedCell={selectedCell}
+                schemaTemplate={schemaTemplate}
+                headerMappings={headerMappings}
+                tableMappings={tableMappings}
+                currentHeaderFieldIndex={currentHeaderFieldIndex}
+                setCurrentHeaderFieldIndex={setCurrentHeaderFieldIndex}
+                currentTableFieldIndex={currentTableFieldIndex}
+                setCurrentTableFieldIndex={setCurrentTableFieldIndex}
+                draftCellOrColumn={draftCellOrColumn}
+                setDraftCellOrColumn={setDraftCellOrColumn}
+                onHeaderFieldMapped={handleHeaderFieldMapped}
+                onTableFieldMapped={handleTableFieldMapped}
+                onRemoveLastHeaderMapping={handleRemoveLastHeaderMapping}
+                onRemoveLastTableMapping={handleRemoveLastTableMapping}
+              />
             )}
           </>
         )}

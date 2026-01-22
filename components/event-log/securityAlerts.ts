@@ -1,4 +1,5 @@
 import type { VehiculoEvento } from "@/domains/vehiculo/types"
+import { checkCriticalFatigueAlert, generateCriticalAlertMessage } from "@/domains/vehiculo/criticalAlert"
 
 export type AlertSeverity = "CRITICAL" | "HIGH" | "MEDIUM" | "OK"
 
@@ -31,7 +32,14 @@ export function generateSecurityBanner(events: VehiculoEvento[]): SecurityAlert 
   // ========================================================================
   const criticalAlert = checkCriticalFatigueAlert(events)
   if (criticalAlert) {
-    return criticalAlert
+    return {
+      severity: "CRITICAL",
+      code: "CRITICAL_FATIGUE",
+      message: generateCriticalAlertMessage(criticalAlert),
+      relatedOperator: criticalAlert.operador,
+      count: criticalAlert.totalEventos,
+      date: criticalAlert.fechaInicio,
+    }
   }
 
   // ========================================================================
@@ -60,57 +68,6 @@ export function generateSecurityBanner(events: VehiculoEvento[]): SecurityAlert 
   }
 }
 
-/**
- * Verifica alerta crítica de fatiga
- * Mismo operador con >= 3 eventos D1 el mismo día
- */
-function checkCriticalFatigueAlert(events: VehiculoEvento[]): SecurityAlert | null {
-  // Agrupar eventos por operador y fecha
-  const eventsByOperatorAndDate = new Map<string, VehiculoEvento[]>()
-
-  events.forEach((evento) => {
-    // Solo eventos D1 (fatiga)
-    if (evento.evento !== "D1") return
-
-    // Filtrar eventos sin operador válido
-    if (!evento.operador || evento.operador.trim() === "") return
-
-    // Obtener fecha sin hora (solo día)
-    const fechaDia = new Date(evento.fecha)
-    fechaDia.setHours(0, 0, 0, 0)
-    const fechaKey = fechaDia.toISOString().split("T")[0]
-
-    // Clave: operador + fecha
-    const key = `${evento.operador.trim()}|${fechaKey}`
-    
-    if (!eventsByOperatorAndDate.has(key)) {
-      eventsByOperatorAndDate.set(key, [])
-    }
-    eventsByOperatorAndDate.get(key)!.push(evento)
-  })
-
-  // Buscar operadores con >= 3 eventos D1 el mismo día
-  for (const [key, eventos] of eventsByOperatorAndDate.entries()) {
-    if (eventos.length >= 3) {
-      const [operador, fechaKey] = key.split("|")
-      const fecha = new Date(fechaKey + "T00:00:00")
-      
-      // Formatear fecha para el mensaje
-      const fechaFormateada = formatFecha(fecha)
-
-      return {
-        severity: "CRITICAL",
-        code: "CRITICAL_FATIGUE",
-        message: `Conductor ${operador} registró múltiples eventos de fatiga el ${fechaFormateada}. Riesgo alto de accidente.`,
-        relatedOperator: operador,
-        count: eventos.length,
-        date: fecha,
-      }
-    }
-  }
-
-  return null
-}
 
 /**
  * Verifica alerta alta de velocidad + fatiga/distracción
@@ -173,12 +130,3 @@ function checkMediumVehicleRecurrence(events: VehiculoEvento[]): SecurityAlert |
   return null
 }
 
-/**
- * Formatea una fecha a formato legible (DD/MM/YYYY)
- */
-function formatFecha(fecha: Date): string {
-  const day = String(fecha.getDate()).padStart(2, "0")
-  const month = String(fecha.getMonth() + 1).padStart(2, "0")
-  const year = fecha.getFullYear()
-  return `${day}/${month}/${year}`
-}

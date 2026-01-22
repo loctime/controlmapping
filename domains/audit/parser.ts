@@ -1,6 +1,7 @@
 import * as XLSX from "xlsx"
 import type { ExcelData, SchemaTemplate, SchemaInstance, DataType } from "@/types/excel"
 import type { AuditItem, AuditTotals, AuditFile } from "./types"
+import { parseExcelDate } from "@/src/lib/excel/date-parser"
 
 // ============================================================================
 // HELPERS INTERNOS
@@ -121,21 +122,26 @@ function convertValue(value: string | number | null, dataType?: DataType): strin
 }
 
 /**
- * Convierte un valor a Date
- * Acepta serial Excel (número) o string en formato ISO/date
+ * Convierte un valor a Date usando parseExcelDate
+ * Retorna Date | null para mantener compatibilidad con el código existente
  */
 function convertToDate(value: string | number): Date | null {
-  if (typeof value === "number") {
-    // Serial de Excel (días desde 1900-01-01)
-    // Excel tiene un bug: cuenta 1900 como año bisiesto, así que restamos 1 día
-    const excelEpoch = new Date(1899, 11, 30)
-    const date = new Date(excelEpoch.getTime() + value * 86400000)
-    return isNaN(date.getTime()) ? null : date
-  }
+  const parsed = parseExcelDate(value)
   
-  if (typeof value === "string") {
-    const date = new Date(value)
-    return isNaN(date.getTime()) ? null : date
+  // Solo convertir si hay alta o media confianza
+  if (parsed.isDate && parsed.confidence !== "low" && parsed.value) {
+    // Parsear el valor normalizado DD/MM o DD/MM/YYYY
+    const parts = parsed.value.split("/")
+    if (parts.length >= 2) {
+      const day = parseInt(parts[0], 10)
+      const month = parseInt(parts[1], 10) - 1 // Mes en JS es 0-indexed
+      const year = parts.length === 3 ? parseInt(parts[2], 10) : new Date().getFullYear()
+      
+      if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
+        const date = new Date(year, month, day)
+        return isNaN(date.getTime()) ? null : date
+      }
+    }
   }
   
   return null

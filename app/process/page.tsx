@@ -28,6 +28,7 @@ import type { VehiculoEventosFile } from "@/domains/vehiculo/types"
 import { EventLogView } from "@/components/event-log/EventLogView"
 import { Loader2, FileSpreadsheet, Upload, X, Download, FileDown, AlertTriangle } from "lucide-react"
 import { normalizeDate } from "@/utils/date"
+import { parseExcelDate } from "@/src/lib/excel/date-parser"
 
 interface ProcessedResult {
   fileName: string
@@ -288,39 +289,27 @@ export default function ProcessPage() {
     return match ? parseInt(match[1], 10) - 1 : 0
   }
 
-  // Función para convertir fecha de Excel (número serial) a Date de JavaScript
+  // Función para convertir fecha de Excel a Date de JavaScript usando parseExcelDate
   const excelDateToJSDate = (excelDate: string | number): Date | null => {
-    try {
-      let serial: number
-      
-      if (typeof excelDate === "number") {
-        serial = excelDate
-      } else if (typeof excelDate === "string") {
-        // Intentar parsear como número
-        const parsed = parseFloat(excelDate.replace(",", "."))
-        if (isNaN(parsed)) {
-          // Intentar parsear como fecha string
-          const dateStr = new Date(excelDate)
-          if (!isNaN(dateStr.getTime())) {
-            return dateStr
-          }
-          return null
+    const parsed = parseExcelDate(excelDate)
+    
+    // Solo convertir si hay alta o media confianza
+    if (parsed.isDate && parsed.confidence !== "low" && parsed.value) {
+      // Parsear el valor normalizado DD/MM o DD/MM/YYYY
+      const parts = parsed.value.split("/")
+      if (parts.length >= 2) {
+        const day = parseInt(parts[0], 10)
+        const month = parseInt(parts[1], 10) - 1 // Mes en JS es 0-indexed
+        const year = parts.length === 3 ? parseInt(parts[2], 10) : new Date().getFullYear()
+        
+        if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
+          const date = new Date(year, month, day)
+          return isNaN(date.getTime()) ? null : date
         }
-        serial = parsed
-      } else {
-        return null
       }
-
-      // Excel cuenta días desde el 1 de enero de 1900
-      // Pero Excel tiene un bug: considera 1900 como año bisiesto (no lo es)
-      // Por eso usamos 25569 días en lugar de 25567
-      const excelEpoch = new Date(1899, 11, 30) // 30 de diciembre de 1899
-      const jsDate = new Date(excelEpoch.getTime() + serial * 86400000)
-      
-      return isNaN(jsDate.getTime()) ? null : jsDate
-    } catch {
-      return null
     }
+    
+    return null
   }
 
   // Función para verificar si un valor indica verdadero (para campos booleanos)
@@ -731,13 +720,14 @@ export default function ProcessPage() {
         const cumplimientoMetrics = calculateCumplimientoMetrics(rows)
         console.log(`  ✓ Métricas calculadas:`, cumplimientoMetrics)
 
-        // Convertir fecha de Excel a Date de JavaScript
+        // Convertir fecha de Excel a Date de JavaScript usando parseExcelDate
         const fechaRaw = headers.fecha
         const fechaConvertida = excelDateToJSDate(fechaRaw)
         if (fechaConvertida) {
           console.log(`  ✓ Fecha convertida: ${fechaConvertida.toISOString().split('T')[0]}`)
         } else if (fechaRaw) {
-          console.log(`  ⚠ No se pudo convertir la fecha: ${fechaRaw}`)
+          const parsed = parseExcelDate(fechaRaw)
+          console.log(`  ⚠ No se pudo convertir la fecha: ${fechaRaw} (confianza: ${parsed.confidence}, formato: ${parsed.sourceFormat})`)
         }
 
         const result: ProcessedResult = {
